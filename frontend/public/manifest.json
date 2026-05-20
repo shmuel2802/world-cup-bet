@@ -1,0 +1,22 @@
+{
+  "short_name": "MundialBet",
+  "name": "Mundial Bet - הימורי מונדיאל חברתיים",
+  "icons": [
+    {
+      "src": "https://flagcdn.com/w160/un.png",
+      "sizes": "160x110",
+      "type": "image/png"
+    },
+    {
+      "src": "https://cdn-icons-png.flaticon.com/512/5323/5323814.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "start_url": ".",
+  "background_color": "#0a0b0d",
+  "theme_color": "#10b981",
+  "display": "standalone",
+  "orientation": "portrait"
+}

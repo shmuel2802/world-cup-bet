@@ -1,0 +1,6 @@
+{
+  "appId": "com.mundial.bet",
+  "appName": "Mundial Bet",
+  "webDir": "dist",
+  "bundledWebRuntime": false
+}
