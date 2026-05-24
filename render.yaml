@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: world-cup-bet-server
+    env: node
+    plan: free
+    rootDir: backend
+    buildCommand: npm install
+    startCommand: node server.js
+    envVars:
+      - key: CLOUD_DB_URL
+        sync: false
+        description: "The full Firebase Realtime Database REST URL with /data.json at the end"
