@@ -17,7 +17,7 @@ import {
   Plus
 } from 'lucide-react';
 
-const API_URL = 'http://localhost:5000/api';
+const API_URL = 'https://world-cup-bet.onrender.com/api';
 
 function App() {
   // Auth State
