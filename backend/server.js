@@ -469,6 +469,34 @@ app.post("/api/admin/user-balance", requireAdmin, (req, res) => {
   });
 });
 
+// Delete a user (admin only)
+app.delete("/api/admin/users/:id", requireAdmin, (req, res) => {
+  const { id } = req.params;
+  const currentUser = db.getUserById(req.user.id);
+  const targetUser = db.getUserById(id);
+
+  if (!targetUser) {
+    return res.status(404).json({ message: "User not found." });
+  }
+
+  if (targetUser.isAdmin) {
+    return res.status(403).json({ message: "Cannot delete admin accounts." });
+  }
+
+  if (currentUser && currentUser.id === targetUser.id) {
+    return res
+      .status(400)
+      .json({ message: "Cannot delete your own admin account." });
+  }
+
+  const removed = db.deleteUser(id);
+  if (!removed) {
+    return res.status(500).json({ message: "Failed to delete user." });
+  }
+
+  res.json({ message: `User ${targetUser.username} deleted successfully.` });
+});
+
 // Add mock/custom match
 app.post("/api/admin/add-match", requireAdmin, (req, res) => {
   const {

@@ -459,6 +459,35 @@ function App() {
     }
   };
 
+  const handleDeleteUser = async (userId, username) => {
+    if (
+      !window.confirm(
+        `האם למחוק את המשתמש ${username}?\nהפעולה תסיר גם את הימורים וניחושים שלו.`,
+      )
+    ) {
+      return;
+    }
+
+    try {
+      const res = await fetch(`${API_URL}/admin/users/${userId}`, {
+        method: "DELETE",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      const data = await res.json();
+      if (res.ok) {
+        showToast(data.message || "משתמש נמחק בהצלחה");
+        fetchUsers();
+        fetchLeaderboardOnly();
+      } else {
+        showToast(data.message || "שגיאה במחיקת המשתמש", "error");
+      }
+    } catch (err) {
+      showToast("שגיאת תקשורת במחיקת המשתמש", "error");
+    }
+  };
+
   const handleSaveBetSettings = async (e) => {
     e.preventDefault();
     const quickAmountsArray = settingsQuickAmounts
@@ -1468,6 +1497,15 @@ function App() {
                         >
                           עדכן יתרה
                         </button>
+                        {!u.isAdmin && (
+                          <button
+                            className="btn btn-danger"
+                            onClick={() => handleDeleteUser(u.id, u.username)}
+                            style={{ padding: "0.5rem 0.75rem" }}
+                          >
+                            מחק משתמש
+                          </button>
+                        )}
                       </div>
                     </div>
                   ))}

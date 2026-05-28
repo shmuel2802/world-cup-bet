@@ -403,6 +403,18 @@ const db = {
     return user;
   },
 
+  deleteUser: (userId) => {
+    const data = readDb();
+    const index = data.users.findIndex((u) => u.id === userId);
+    if (index === -1) return false;
+
+    data.users.splice(index, 1);
+    data.bets = data.bets.filter((b) => b.userId !== userId);
+    data.predictions = data.predictions.filter((p) => p.userId !== userId);
+    writeDb(data);
+    return true;
+  },
+
   getMatches: () => readDb().matches,
   getMatchById: (id) => readDb().matches.find((m) => m.id === id),
   saveMatch: (match) => {
