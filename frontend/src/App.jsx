@@ -17,6 +17,7 @@ import {
   Plus,
   Eye,
   EyeOff,
+  Star,
 } from "lucide-react";
 
 const API_URL =
@@ -43,6 +44,23 @@ function App() {
   const [matches, setMatches] = useState([]);
   const [bets, setBets] = useState([]);
   const [leaderboard, setLeaderboard] = useState([]);
+  const [users, setUsers] = useState([]);
+  const [betSettings, setBetSettings] = useState({
+    betMin: 10,
+    betMax: 500,
+    quickAmounts: [50, 100, 200, 500],
+  });
+  const [predictionOptions, setPredictionOptions] = useState({
+    teams: [],
+    players: [],
+  });
+  const [myPrediction, setMyPrediction] = useState(null);
+  const [predictionWinner, setPredictionWinner] = useState("");
+  const [predictionTopScorer, setPredictionTopScorer] = useState("");
+  const [settingsMin, setSettingsMin] = useState(10);
+  const [settingsMax, setSettingsMax] = useState(500);
+  const [settingsQuickAmounts, setSettingsQuickAmounts] =
+    useState("50,100,200,500");
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState({ text: "", type: "" });
 
@@ -70,11 +88,19 @@ function App() {
       localStorage.setItem("token", token);
       fetchProfile();
       fetchData();
+      fetchSettings();
+      fetchPredictionOptions();
+      fetchMyPrediction();
     } else {
       localStorage.removeItem("token");
       setUser(null);
     }
   }, [token]);
+
+  useEffect(() => {
+    if (!token || !user?.isAdmin) return;
+    fetchUsers();
+  }, [token, user?.isAdmin]);
 
   // Periodic background data sync every 15 seconds
   useEffect(() => {
@@ -154,6 +180,66 @@ function App() {
     }
   };
 
+  const fetchSettings = async () => {
+    try {
+      const res = await fetch(`${API_URL}/settings`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setBetSettings(data);
+        setSettingsMin(data.betMin || 10);
+        setSettingsMax(data.betMax || 500);
+        setSettingsQuickAmounts(
+          (data.quickAmounts || [50, 100, 200, 500]).join(","),
+        );
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const fetchPredictionOptions = async () => {
+    try {
+      const res = await fetch(`${API_URL}/predictions/options`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (res.ok) setPredictionOptions(data);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const fetchMyPrediction = async () => {
+    try {
+      const res = await fetch(`${API_URL}/predictions`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setMyPrediction(data);
+        setPredictionWinner(data.winnerTeam || "");
+        setPredictionTopScorer(data.topScorer || "");
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const fetchUsers = async () => {
+    if (!user?.isAdmin) return;
+    try {
+      const res = await fetch(`${API_URL}/admin/users`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (res.ok) setUsers(data);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
   // --- Auth Handlers ---
   const handleAuth = async (e) => {
     e.preventDefault();
@@ -204,12 +290,23 @@ function App() {
     }
     setBetSlipMatch(match);
     setBetType("HOME");
-    setBetAmount(100);
+    setBetAmount(Math.min(user.balance, betSettings.betMax || 500));
     setPredHome(0);
     setPredAway(0);
   };
 
   const placeBet = async () => {
+    if (betAmount < (betSettings.betMin || 10)) {
+      showToast(`בחר לפחות ${betSettings.betMin || 10} מטבעות`, "error");
+      return;
+    }
+    if (betAmount > (betSettings.betMax || 500)) {
+      showToast(
+        `ההימור המקסימלי הוא ${betSettings.betMax || 500} מטבעות`,
+        "error",
+      );
+      return;
+    }
     if (betAmount > user.balance) {
       showToast("אין לך מספיק מטבעות! הזן סכום נמוך יותר.", "error");
       return;
@@ -332,6 +429,92 @@ function App() {
       }
     } catch (err) {
       showToast("שגיאה ביצירת משחק חדש", "error");
+    }
+  };
+
+  const handleUpdateUserBalance = async (userId, amount) => {
+    try {
+      const res = await fetch(`${API_URL}/admin/user-balance`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ userId, amount }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        showToast(data.message);
+        fetchUsers();
+        fetchLeaderboardOnly();
+      } else {
+        showToast(data.message || "שגיאה בעדכון יתרה", "error");
+      }
+    } catch (err) {
+      showToast("שגיאה בתקשורת עם השרת", "error");
+    }
+  };
+
+  const handleSaveBetSettings = async (e) => {
+    e.preventDefault();
+    const quickAmountsArray = settingsQuickAmounts
+      .split(",")
+      .map((value) => parseInt(value.trim(), 10))
+      .filter((value) => !Number.isNaN(value) && value > 0);
+
+    try {
+      const res = await fetch(`${API_URL}/admin/bet-settings`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          betMin: parseInt(settingsMin, 10),
+          betMax: parseInt(settingsMax, 10),
+          quickAmounts: quickAmountsArray,
+        }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        showToast(data.message);
+        fetchSettings();
+      } else {
+        showToast(data.message || "שגיאה בעדכון הגדרות", "error");
+      }
+    } catch (err) {
+      showToast("שגיאה בתקשורת עם השרת", "error");
+    }
+  };
+
+  const handlePredictionSubmit = async (e) => {
+    e.preventDefault();
+    if (!predictionWinner || !predictionTopScorer) {
+      showToast("אנא בחר מנצחת ומלך שערים", "error");
+      return;
+    }
+
+    try {
+      const res = await fetch(`${API_URL}/predictions`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          winnerTeam: predictionWinner,
+          topScorer: predictionTopScorer,
+        }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        showToast(data.message);
+        setMyPrediction(data.prediction);
+      } else {
+        showToast(data.message || "שגיאה בשמירת ניחוש", "error");
+      }
+    } catch (err) {
+      showToast("שגיאה בתקשורת עם השרת", "error");
     }
   };
 
@@ -572,6 +755,13 @@ function App() {
         >
           <History size={18} />
           ההימורים שלי
+        </button>
+        <button
+          className={`tab-btn ${activeTab === "predictions" ? "active" : ""}`}
+          onClick={() => setActiveTab("predictions")}
+        >
+          <Star size={18} />
+          ניחושים
         </button>
         {user.isAdmin && (
           <button
@@ -1041,7 +1231,90 @@ function App() {
             </div>
           )}
 
-          {/* TAB 4: ADMIN CONTROL PANEL */}
+          {/* TAB 4: PREDICTIONS */}
+          {activeTab === "predictions" && (
+            <div>
+              <div className="section-title">
+                <Star size={24} style={{ color: "var(--accent)" }} />
+                <h2>ניחושי מונדיאל</h2>
+              </div>
+
+              <div className="glass-panel admin-card">
+                <h3>בחר מנצחת ו-מלך שערים</h3>
+                <p
+                  style={{
+                    fontSize: "0.9rem",
+                    color: "var(--text-secondary)",
+                    marginBottom: "1rem",
+                  }}
+                >
+                  ניחש את הנבחרת שתזכה במונדיאל ואת השחקן שיסיים כמלך שערים.
+                </p>
+                <form
+                  onSubmit={handlePredictionSubmit}
+                  style={{ display: "grid", gap: "1rem" }}
+                >
+                  <div className="form-group">
+                    <label>נבחרת שתיקח את המונדיאל</label>
+                    <select
+                      className="form-input"
+                      value={predictionWinner}
+                      onChange={(e) => setPredictionWinner(e.target.value)}
+                    >
+                      <option value="">בחר נבחרת</option>
+                      {predictionOptions.teams.map((team) => (
+                        <option key={team.id} value={team.name}>
+                          {team.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="form-group">
+                    <label>מלך השערים של המונדיאל</label>
+                    <select
+                      className="form-input"
+                      value={predictionTopScorer}
+                      onChange={(e) => setPredictionTopScorer(e.target.value)}
+                    >
+                      <option value="">בחר שחקן</option>
+                      {predictionOptions.players.map((player) => (
+                        <option key={player.id} value={player.name}>
+                          {player.name} ({player.team})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <button type="submit" className="btn btn-primary">
+                    שמור ניחוש
+                  </button>
+                </form>
+
+                {myPrediction && myPrediction.winnerTeam && (
+                  <div
+                    style={{
+                      marginTop: "1.5rem",
+                      padding: "1rem",
+                      background: "rgba(255,255,255,0.04)",
+                      borderRadius: "14px",
+                      border: "1px solid rgba(255,255,255,0.08)",
+                    }}
+                  >
+                    <strong>הניחוש שנשמר:</strong>
+                    <p style={{ margin: "0.5rem 0" }}>
+                      מנצחת: <strong>{myPrediction.winnerTeam}</strong>
+                    </p>
+                    <p style={{ margin: 0 }}>
+                      מלך שערים: <strong>{myPrediction.topScorer}</strong>
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* TAB 5: ADMIN CONTROL PANEL */}
           {activeTab === "admin" && user.isAdmin && (
             <div>
               <div className="section-title">
@@ -1067,6 +1340,131 @@ function App() {
                   <RefreshCw size={18} />
                   סנכרן ועדכן נתונים עכשיו
                 </button>
+              </div>
+
+              {/* User management and bet settings */}
+              <div className="glass-panel admin-card">
+                <h3>ניהול משתמשים והגדרות הימורים</h3>
+                <p
+                  style={{
+                    fontSize: "0.9rem",
+                    color: "var(--text-secondary)",
+                    marginBottom: "1rem",
+                  }}
+                >
+                  כאן תוכל לראות את כל המשתמשים, לעדכן את היתרות שלהם, ולהגדיר
+                  את הגבולות והכפתורים ל-הימורים.
+                </p>
+
+                <div
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "1rem",
+                    marginBottom: "1rem",
+                  }}
+                >
+                  {users.map((u) => (
+                    <div
+                      key={u.id}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        gap: "1rem",
+                        padding: "0.85rem 1rem",
+                        borderRadius: "14px",
+                        background: "rgba(255,255,255,0.04)",
+                        border: "1px solid rgba(255,255,255,0.08)",
+                      }}
+                    >
+                      <div>
+                        <strong>{u.username}</strong>
+                        <div
+                          style={{
+                            color: "var(--text-secondary)",
+                            fontSize: "0.85rem",
+                          }}
+                        >
+                          {u.isAdmin ? "מנהל" : "שחקן"} | הימורים: {u.totalBets}
+                        </div>
+                      </div>
+                      <div
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "0.5rem",
+                        }}
+                      >
+                        <span>{u.balance.toLocaleString()} 💰</span>
+                        <button
+                          className="btn btn-secondary"
+                          onClick={() => {
+                            const amount = prompt(
+                              `קבע יתרה חדשה ל-${u.username}`,
+                              `${u.balance}`,
+                            );
+                            if (amount !== null) {
+                              const parsed = parseInt(amount, 10);
+                              if (!Number.isNaN(parsed))
+                                handleUpdateUserBalance(u.id, parsed);
+                            }
+                          }}
+                          style={{ padding: "0.5rem 0.75rem" }}
+                        >
+                          עדכן יתרה
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                <form
+                  onSubmit={handleSaveBetSettings}
+                  style={{ display: "grid", gap: "1rem" }}
+                >
+                  <div
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "1fr 1fr",
+                      gap: "1rem",
+                    }}
+                  >
+                    <div className="form-group">
+                      <label>הימור מינימלי</label>
+                      <input
+                        type="number"
+                        className="form-input"
+                        value={settingsMin}
+                        onChange={(e) => setSettingsMin(e.target.value)}
+                      />
+                    </div>
+                    <div className="form-group">
+                      <label>הימור מקסימלי</label>
+                      <input
+                        type="number"
+                        className="form-input"
+                        value={settingsMax}
+                        onChange={(e) => setSettingsMax(e.target.value)}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="form-group">
+                    <label>ערכי הימור מהירים</label>
+                    <input
+                      type="text"
+                      className="form-input"
+                      value={settingsQuickAmounts}
+                      onChange={(e) => setSettingsQuickAmounts(e.target.value)}
+                      placeholder="לדוגמה: 50,100,200,500"
+                    />
+                  </div>
+
+                  <button type="submit" className="btn btn-primary">
+                    שמור הגדרות הימורים
+                  </button>
+                </form>
               </div>
 
               {/* Set manual match score (For tests & override) */}
@@ -1612,40 +2010,26 @@ function App() {
                 </button>
               </div>
               <div
-                style={{ display: "flex", gap: "0.35rem", marginTop: "0.5rem" }}
+                style={{
+                  display: "flex",
+                  gap: "0.35rem",
+                  marginTop: "0.5rem",
+                  flexWrap: "wrap",
+                }}
               >
-                <button
-                  type="button"
-                  className="btn btn-secondary"
-                  onClick={() => setBetAmount(50)}
-                  style={{ padding: "0.25rem 0.5rem", fontSize: "0.8rem" }}
-                >
-                  50
-                </button>
-                <button
-                  type="button"
-                  className="btn btn-secondary"
-                  onClick={() => setBetAmount(100)}
-                  style={{ padding: "0.25rem 0.5rem", fontSize: "0.8rem" }}
-                >
-                  100
-                </button>
-                <button
-                  type="button"
-                  className="btn btn-secondary"
-                  onClick={() => setBetAmount(200)}
-                  style={{ padding: "0.25rem 0.5rem", fontSize: "0.8rem" }}
-                >
-                  200
-                </button>
-                <button
-                  type="button"
-                  className="btn btn-secondary"
-                  onClick={() => setBetAmount(500)}
-                  style={{ padding: "0.25rem 0.5rem", fontSize: "0.8rem" }}
-                >
-                  500
-                </button>
+                {(betSettings.quickAmounts || [50, 100, 200, 500]).map(
+                  (amount) => (
+                    <button
+                      key={amount}
+                      type="button"
+                      className="btn btn-secondary"
+                      onClick={() => setBetAmount(amount)}
+                      style={{ padding: "0.25rem 0.5rem", fontSize: "0.8rem" }}
+                    >
+                      {amount}
+                    </button>
+                  ),
+                )}
               </div>
             </div>
 

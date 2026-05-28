@@ -10,6 +10,154 @@ const CLOUD_DB_URL = process.env.CLOUD_DB_URL;
 let inMemoryData = null;
 const DEFAULT_ADMIN_PASSWORD_HASH =
   "$2b$10$iR2ouc9cGsSEWpU7qBVX1e/Ptl5Q4IMFLiVSZ8rNdyiP7O9KgkTZ."; // admin123
+const DEFAULT_BET_SETTINGS = {
+  registrationEnabled: true,
+  startingBalance: 1000,
+  betMin: 10,
+  betMax: 500,
+  quickAmounts: [50, 100, 200, 500],
+  footballApiKey: process.env.FOOTBALL_API_KEY || "",
+};
+
+const DEFAULT_WORLD_CUP_TEAMS = [
+  {
+    id: "argentina",
+    name: "Argentina",
+    flag: "https://flagcdn.com/w160/ar.png",
+  },
+  { id: "brazil", name: "Brazil", flag: "https://flagcdn.com/w160/br.png" },
+  { id: "france", name: "France", flag: "https://flagcdn.com/w160/fr.png" },
+  {
+    id: "england",
+    name: "England",
+    flag: "https://flagcdn.com/w160/gb-eng.png",
+  },
+  { id: "portugal", name: "Portugal", flag: "https://flagcdn.com/w160/pt.png" },
+  { id: "spain", name: "Spain", flag: "https://flagcdn.com/w160/es.png" },
+  { id: "belgium", name: "Belgium", flag: "https://flagcdn.com/w160/be.png" },
+  {
+    id: "netherlands",
+    name: "Netherlands",
+    flag: "https://flagcdn.com/w160/nl.png",
+  },
+  { id: "croatia", name: "Croatia", flag: "https://flagcdn.com/w160/hr.png" },
+  { id: "morocco", name: "Morocco", flag: "https://flagcdn.com/w160/ma.png" },
+  { id: "japan", name: "Japan", flag: "https://flagcdn.com/w160/jp.png" },
+  { id: "usa", name: "USA", flag: "https://flagcdn.com/w160/us.png" },
+  {
+    id: "australia",
+    name: "Australia",
+    flag: "https://flagcdn.com/w160/au.png",
+  },
+  { id: "senegal", name: "Senegal", flag: "https://flagcdn.com/w160/sn.png" },
+];
+
+const DEFAULT_WORLD_CUP_PLAYERS = [
+  { id: "messi", name: "Lionel Messi", team: "Argentina", position: "Forward" },
+  {
+    id: "lautaro",
+    name: "Lautaro Martínez",
+    team: "Argentina",
+    position: "Forward",
+  },
+  {
+    id: "depaul",
+    name: "Rodrigo De Paul",
+    team: "Argentina",
+    position: "Midfielder",
+  },
+  { id: "neymar", name: "Neymar Jr.", team: "Brazil", position: "Forward" },
+  {
+    id: "vinicius",
+    name: "Vinícius Júnior",
+    team: "Brazil",
+    position: "Forward",
+  },
+  { id: "casemiro", name: "Casemiro", team: "Brazil", position: "Midfielder" },
+  { id: "mbappe", name: "Kylian Mbappé", team: "France", position: "Forward" },
+  {
+    id: "griezmann",
+    name: "Antoine Griezmann",
+    team: "France",
+    position: "Forward",
+  },
+  { id: "pogba", name: "Paul Pogba", team: "France", position: "Midfielder" },
+  { id: "kane", name: "Harry Kane", team: "England", position: "Forward" },
+  {
+    id: "sterling",
+    name: "Raheem Sterling",
+    team: "England",
+    position: "Forward",
+  },
+  { id: "stones", name: "John Stones", team: "England", position: "Defender" },
+  {
+    id: "ronaldo",
+    name: "Cristiano Ronaldo",
+    team: "Portugal",
+    position: "Forward",
+  },
+  {
+    id: "bruno",
+    name: "Bruno Fernandes",
+    team: "Portugal",
+    position: "Midfielder",
+  },
+  {
+    id: "bernardo",
+    name: "Bernardo Silva",
+    team: "Portugal",
+    position: "Midfielder",
+  },
+  { id: "ferran", name: "Ferran Torres", team: "Spain", position: "Forward" },
+  { id: "pedri", name: "Pedri", team: "Spain", position: "Midfielder" },
+  {
+    id: "debruyne",
+    name: "Kevin De Bruyne",
+    team: "Belgium",
+    position: "Midfielder",
+  },
+  { id: "hazard", name: "Eden Hazard", team: "Belgium", position: "Forward" },
+  { id: "lukaku", name: "Romelu Lukaku", team: "Belgium", position: "Forward" },
+  {
+    id: "depay",
+    name: "Memphis Depay",
+    team: "Netherlands",
+    position: "Forward",
+  },
+  {
+    id: "vandijk",
+    name: "Virgil van Dijk",
+    team: "Netherlands",
+    position: "Defender",
+  },
+  {
+    id: "modric",
+    name: "Luka Modrić",
+    team: "Croatia",
+    position: "Midfielder",
+  },
+  {
+    id: "hakimi",
+    name: "Achraf Hakimi",
+    team: "Morocco",
+    position: "Defender",
+  },
+  { id: "saka", name: "Bukayo Saka", team: "England", position: "Forward" },
+  { id: "kubo", name: "Takefusa Kubo", team: "Japan", position: "Midfielder" },
+  {
+    id: "pulisic",
+    name: "Christian Pulisic",
+    team: "USA",
+    position: "Forward",
+  },
+  {
+    id: "leckie",
+    name: "Mathew Leckie",
+    team: "Australia",
+    position: "Forward",
+  },
+  { id: "mane", name: "Sadio Mané", team: "Senegal", position: "Forward" },
+];
 
 // Initialize the database with seed data if it doesn't exist
 function getSeedData() {
@@ -49,10 +197,11 @@ function getSeedData() {
     matches: [],
     bets: [],
     settings: {
-      registrationEnabled: true,
-      startingBalance: 1000,
-      footballApiKey: process.env.FOOTBALL_API_KEY || "",
+      ...DEFAULT_BET_SETTINGS,
     },
+    worldCupTeams: DEFAULT_WORLD_CUP_TEAMS,
+    worldCupPlayers: DEFAULT_WORLD_CUP_PLAYERS,
+    predictions: [],
   };
   return seedData;
 }
@@ -63,14 +212,17 @@ function ensureSystemData(data) {
   if (!Array.isArray(data.users)) data.users = [];
   if (!Array.isArray(data.matches)) data.matches = [];
   if (!Array.isArray(data.bets)) data.bets = [];
+  if (!Array.isArray(data.worldCupTeams))
+    data.worldCupTeams = DEFAULT_WORLD_CUP_TEAMS;
+  if (!Array.isArray(data.worldCupPlayers))
+    data.worldCupPlayers = DEFAULT_WORLD_CUP_PLAYERS;
+  if (!Array.isArray(data.predictions)) data.predictions = [];
   if (!data.settings || typeof data.settings !== "object") {
     data.settings = {};
   }
 
   data.settings = {
-    registrationEnabled: true,
-    startingBalance: 1000,
-    footballApiKey: process.env.FOOTBALL_API_KEY || "",
+    ...DEFAULT_BET_SETTINGS,
     ...data.settings,
   };
 
@@ -304,6 +456,33 @@ const db = {
     data.settings = { ...data.settings, ...settings };
     writeDb(data);
     return data.settings;
+  },
+
+  getTeams: () => readDb().worldCupTeams,
+  getPlayers: () => readDb().worldCupPlayers,
+  getPredictions: () => readDb().predictions,
+  getPredictionByUserId: (userId) =>
+    readDb().predictions.find((p) => p.userId === userId),
+  savePrediction: (prediction) => {
+    const data = readDb();
+    const index = data.predictions.findIndex(
+      (p) => p.userId === prediction.userId,
+    );
+    if (index !== -1) {
+      data.predictions[index] = {
+        ...data.predictions[index],
+        ...prediction,
+        updatedAt: new Date().toISOString(),
+      };
+    } else {
+      data.predictions.push({
+        ...prediction,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      });
+    }
+    writeDb(data);
+    return prediction;
   },
 };
 
