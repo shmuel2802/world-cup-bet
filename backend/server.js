@@ -104,12 +104,10 @@ app.post("/api/auth/register", async (req, res) => {
       },
     });
   } catch (error) {
-    res
-      .status(500)
-      .json({
-        message: "Server error during registration.",
-        error: error.message,
-      });
+    res.status(500).json({
+      message: "Server error during registration.",
+      error: error.message,
+    });
   }
 });
 
@@ -248,12 +246,9 @@ app.post("/api/bets", authenticateToken, (req, res) => {
 
   // Check if match already started or finished
   if (match.status !== "SCHEDULED") {
-    return res
-      .status(400)
-      .json({
-        message:
-          "Cannot place bets. The match has already started or finished.",
-      });
+    return res.status(400).json({
+      message: "Cannot place bets. The match has already started or finished.",
+    });
   }
 
   const now = new Date();
@@ -516,6 +511,64 @@ app.post("/api/admin/add-match", requireAdmin, (req, res) => {
   res.status(201).json({
     message: "Match added successfully!",
     match: newMatch,
+  });
+});
+
+// --- WORLD CUP DATA ROUTES ---
+
+// Get all World Cup teams
+app.get("/api/world-cup/teams", authenticateToken, (req, res) => {
+  const data = db.readDb();
+  res.json(data.worldCupTeams || []);
+});
+
+// Get all World Cup players
+app.get("/api/world-cup/players", authenticateToken, (req, res) => {
+  const data = db.readDb();
+  res.json(data.worldCupPlayers || []);
+});
+
+// Sync matches from external API (admin only)
+app.get("/api/matches/sync", requireAdmin, async (req, res) => {
+  try {
+    const synced = await apiService.syncMatches();
+    if (synced) {
+      const matches = db.getMatches();
+      return res.json({
+        message: "Matches synced successfully from API",
+        matchCount: matches.length,
+        matches: matches,
+      });
+    } else {
+      return res.status(400).json({
+        message: "Could not sync matches. API key may not be configured.",
+      });
+    }
+  } catch (error) {
+    console.error("Error syncing matches:", error.message);
+    res.status(500).json({ message: "Error syncing matches from API" });
+  }
+});
+
+// Update match odds/payouts (admin only)
+app.patch("/api/admin/matches/:id", requireAdmin, (req, res) => {
+  const { id } = req.params;
+  const { homeOdds, drawOdds, awayOdds } = req.body;
+
+  const match = db.getMatchById(id);
+  if (!match) {
+    return res.status(404).json({ message: "Match not found." });
+  }
+
+  if (homeOdds !== undefined) match.homeOdds = parseFloat(homeOdds);
+  if (drawOdds !== undefined) match.drawOdds = parseFloat(drawOdds);
+  if (awayOdds !== undefined) match.awayOdds = parseFloat(awayOdds);
+
+  db.saveMatch(match);
+
+  res.json({
+    message: "Match odds updated successfully",
+    match: match,
   });
 });
 

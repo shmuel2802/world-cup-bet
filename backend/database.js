@@ -484,6 +484,7 @@ const db = {
     writeDb(data);
     return prediction;
   },
+  readDb: () => readDb(),
 };
 
 module.exports = db;

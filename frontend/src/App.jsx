@@ -76,6 +76,10 @@ function App() {
   const [adminHomeScore, setAdminHomeScore] = useState("");
   const [adminAwayScore, setAdminAwayScore] = useState("");
   const [adminMatchStatus, setAdminMatchStatus] = useState("FINISHED");
+  const [adminEditingOdds, setAdminEditingOdds] = useState(null);
+  const [adminHomeOdds, setAdminHomeOdds] = useState("");
+  const [adminDrawOdds, setAdminDrawOdds] = useState("");
+  const [adminAwayOdds, setAdminAwayOdds] = useState("");
 
   // Custom Match state for admin
   const [customHomeTeam, setCustomHomeTeam] = useState("");
@@ -512,6 +516,56 @@ function App() {
         setMyPrediction(data.prediction);
       } else {
         showToast(data.message || "שגיאה בשמירת ניחוש", "error");
+      }
+    } catch (err) {
+      showToast("שגיאה בתקשורת עם השרת", "error");
+    }
+  };
+
+  const handleSyncMatchesFromAPI = async () => {
+    if (!user.isAdmin) return;
+    setLoading(true);
+    try {
+      const res = await fetch(`${API_URL}/matches/sync`, {
+        method: "GET",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (res.ok) {
+        showToast(data.message || "משחקים סנכרנו בהצלחה מ־API");
+        fetchData(); // Refresh the matches list
+      } else {
+        showToast(data.message || "שגיאה בסנכרון משחקים", "error");
+      }
+    } catch (err) {
+      showToast("שגיאה בתקשורת עם השרת", "error");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleUpdateMatchOdds = async (matchId) => {
+    if (!user.isAdmin || !adminEditingOdds) return;
+    try {
+      const res = await fetch(`${API_URL}/admin/matches/${matchId}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          homeOdds: parseFloat(adminHomeOdds),
+          drawOdds: parseFloat(adminDrawOdds),
+          awayOdds: parseFloat(adminAwayOdds),
+        }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        showToast("הימורים עודכנו בהצלחה");
+        setAdminEditingOdds(null);
+        fetchData(); // Refresh matches
+      } else {
+        showToast(data.message || "שגיאה בעדכון הימורים", "error");
       }
     } catch (err) {
       showToast("שגיאה בתקשורת עם השרת", "error");
@@ -1696,6 +1750,161 @@ function App() {
                     </button>
                   </div>
                 </form>
+              </div>
+
+              {/* Manage Match Odds */}
+              <div className="glass-panel admin-card">
+                <h3>ניהול הימורים ובאודס של משחקים</h3>
+                <p
+                  style={{
+                    fontSize: "0.9rem",
+                    color: "var(--text-secondary)",
+                    marginBottom: "1.25rem",
+                  }}
+                >
+                  בחר משחק ועדכן את הבאודס (הימורים) לכל תוצאה. כל משחק ממקור
+                  ה־API יוכל להיערך כאן.
+                </p>
+
+                <button
+                  onClick={handleSyncMatchesFromAPI}
+                  className="btn btn-accent"
+                  style={{ marginBottom: "1rem" }}
+                  disabled={loading}
+                >
+                  <RefreshCw size={18} />
+                  {loading ? "סנכרון..." : "סנכרן משחקים מ־API"}
+                </button>
+
+                {matches.length > 0 && (
+                  <div
+                    style={{
+                      display: "grid",
+                      gap: "0.75rem",
+                      marginTop: "1rem",
+                    }}
+                  >
+                    {matches.map((m) => (
+                      <div
+                        key={m.id}
+                        style={{
+                          padding: "1rem",
+                          background: "rgba(255,255,255,0.03)",
+                          borderRadius: "10px",
+                          border: "1px solid rgba(255,255,255,0.08)",
+                        }}
+                      >
+                        <div
+                          style={{
+                            display: "flex",
+                            justifyContent: "space-between",
+                            alignItems: "center",
+                            marginBottom: "0.5rem",
+                          }}
+                        >
+                          <strong>
+                            {m.homeTeam} vs {m.awayTeam}
+                          </strong>
+                          {adminEditingOdds === m.id ? (
+                            <button
+                              className="btn btn-secondary"
+                              onClick={() => handleUpdateMatchOdds(m.id)}
+                              style={{
+                                padding: "0.4rem 0.8rem",
+                                fontSize: "0.85rem",
+                              }}
+                            >
+                              שמור
+                            </button>
+                          ) : (
+                            <button
+                              className="btn btn-secondary"
+                              onClick={() => {
+                                setAdminEditingOdds(m.id);
+                                setAdminHomeOdds(m.homeOdds || "2.0");
+                                setAdminDrawOdds(m.drawOdds || "3.0");
+                                setAdminAwayOdds(m.awayOdds || "2.5");
+                              }}
+                              style={{
+                                padding: "0.4rem 0.8rem",
+                                fontSize: "0.85rem",
+                              }}
+                            >
+                              ערוך
+                            </button>
+                          )}
+                        </div>
+
+                        {adminEditingOdds === m.id ? (
+                          <div
+                            style={{
+                              display: "grid",
+                              gridTemplateColumns: "1fr 1fr 1fr",
+                              gap: "0.5rem",
+                            }}
+                          >
+                            <div className="form-group">
+                              <label style={{ fontSize: "0.8rem" }}>
+                                ניצחון בית
+                              </label>
+                              <input
+                                type="number"
+                                step="0.1"
+                                className="form-input"
+                                value={adminHomeOdds}
+                                onChange={(e) =>
+                                  setAdminHomeOdds(e.target.value)
+                                }
+                                style={{ fontSize: "0.9rem" }}
+                              />
+                            </div>
+                            <div className="form-group">
+                              <label style={{ fontSize: "0.8rem" }}>תיקו</label>
+                              <input
+                                type="number"
+                                step="0.1"
+                                className="form-input"
+                                value={adminDrawOdds}
+                                onChange={(e) =>
+                                  setAdminDrawOdds(e.target.value)
+                                }
+                                style={{ fontSize: "0.9rem" }}
+                              />
+                            </div>
+                            <div className="form-group">
+                              <label style={{ fontSize: "0.8rem" }}>
+                                ניצחון חוץ
+                              </label>
+                              <input
+                                type="number"
+                                step="0.1"
+                                className="form-input"
+                                value={adminAwayOdds}
+                                onChange={(e) =>
+                                  setAdminAwayOdds(e.target.value)
+                                }
+                                style={{ fontSize: "0.9rem" }}
+                              />
+                            </div>
+                          </div>
+                        ) : (
+                          <div
+                            style={{
+                              display: "flex",
+                              gap: "1rem",
+                              fontSize: "0.9rem",
+                              color: "var(--text-secondary)",
+                            }}
+                          >
+                            <span>בית: {m.homeOdds?.toFixed(2)}</span>
+                            <span>תיקו: {m.drawOdds?.toFixed(2)}</span>
+                            <span>חוץ: {m.awayOdds?.toFixed(2)}</span>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
           )}
