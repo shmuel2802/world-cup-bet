@@ -1,7 +1,7 @@
 <?xml version='1.0' encoding='utf-8'?>
 <resources>
-    <string name="app_name">Mundial Bet</string>
-    <string name="title_activity_main">Mundial Bet</string>
+    <string name="app_name">FIFA World Cup</string>
+    <string name="title_activity_main">FIFA World Cup</string>
     <string name="package_name">com.mundial.bet</string>
     <string name="custom_url_scheme">com.mundial.bet</string>
 </resources>

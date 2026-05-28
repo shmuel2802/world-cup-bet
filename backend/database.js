@@ -8,6 +8,7 @@ const DB_PATH = path.join(__dirname, 'db.json');
 const CLOUD_DB_URL = process.env.CLOUD_DB_URL;
 
 let inMemoryData = null;
+const DEFAULT_ADMIN_PASSWORD_HASH = "$2a$10$tM2e2x18Nis5gB7J8wepd.sZ0.y6vG/yq/FszrL7tK7C4p3zZ0a9u"; // admin123
 
 // Initialize the database with seed data if it doesn't exist
 function getSeedData() {
@@ -50,6 +51,42 @@ function getSeedData() {
     }
   };
   return seedData;
+}
+
+function ensureSystemData(data) {
+  if (!data || typeof data !== 'object') return getSeedData();
+
+  if (!Array.isArray(data.users)) data.users = [];
+  if (!Array.isArray(data.matches)) data.matches = [];
+  if (!Array.isArray(data.bets)) data.bets = [];
+  if (!data.settings || typeof data.settings !== 'object') {
+    data.settings = {};
+  }
+
+  data.settings = {
+    registrationEnabled: true,
+    startingBalance: 1000,
+    footballApiKey: process.env.FOOTBALL_API_KEY || "",
+    ...data.settings
+  };
+
+  const hasAdmin = data.users.some(
+    (u) => typeof u?.username === 'string' && u.username.toLowerCase() === 'admin'
+  );
+
+  if (!hasAdmin) {
+    data.users.push({
+      id: "admin-id",
+      username: "admin",
+      passwordHash: DEFAULT_ADMIN_PASSWORD_HASH, // admin123
+      isAdmin: true,
+      balance: 1000,
+      winRate: 0,
+      totalBets: 0
+    });
+  }
+
+  return data;
 }
 
 // Synchronous HTTPS get request to load database on startup (if cloud is configured)
@@ -120,7 +157,7 @@ function initDb() {
   // Try to load from cloud first
   const cloudData = loadCloudDbSync();
   if (cloudData) {
-    inMemoryData = cloudData;
+    inMemoryData = ensureSystemData(cloudData);
     // Write a local copy as backup
     fs.writeFileSync(DB_PATH, JSON.stringify(inMemoryData, null, 2), 'utf8');
     return;
@@ -130,7 +167,7 @@ function initDb() {
   if (fs.existsSync(DB_PATH)) {
     try {
       const fileData = fs.readFileSync(DB_PATH, 'utf8');
-      inMemoryData = JSON.parse(fileData);
+      inMemoryData = ensureSystemData(JSON.parse(fileData));
       console.log("Loaded database from local db.json. 📂");
       return;
     } catch (e) {
@@ -139,7 +176,7 @@ function initDb() {
   }
 
   // Fallback to seeds
-  inMemoryData = getSeedData();
+  inMemoryData = ensureSystemData(getSeedData());
   fs.writeFileSync(DB_PATH, JSON.stringify(inMemoryData, null, 2), 'utf8');
   console.log("Created new local db.json with seed data. 🌱");
 }
