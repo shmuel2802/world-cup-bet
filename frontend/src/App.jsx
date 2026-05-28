@@ -14,7 +14,9 @@ import {
   ChevronRight, 
   X,
   RefreshCw,
-  Plus
+  Plus,
+  Eye,
+  EyeOff
 } from 'lucide-react';
 
 const API_URL = 'https://world-cup-bet.onrender.com/api';
@@ -26,6 +28,7 @@ function App() {
   const [authMode, setAuthMode] = useState('login'); // login or register
   const [usernameInput, setUsernameInput] = useState('');
   const [passwordInput, setPasswordInput] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [authError, setAuthError] = useState('');
 
   // Main UI Tabs
@@ -387,14 +390,24 @@ function App() {
 
               <div className="form-group">
                 <label>סיסמה (פשוטה)</label>
-                <input 
-                  type="password" 
-                  className="form-input" 
-                  placeholder="הזן סיסמה"
-                  value={passwordInput}
-                  onChange={e => setPasswordInput(e.target.value)}
-                  required 
-                />
+                <div className="password-input-wrapper">
+                  <input 
+                    type={showPassword ? 'text' : 'password'} 
+                    className="form-input password-input-field" 
+                    placeholder="הזן סיסמה"
+                    value={passwordInput}
+                    onChange={e => setPasswordInput(e.target.value)}
+                    required 
+                  />
+                  <button
+                    type="button"
+                    className="password-toggle-btn"
+                    onClick={() => setShowPassword(prev => !prev)}
+                    aria-label={showPassword ? 'הסתר סיסמה' : 'הצג סיסמה'}
+                  >
+                    {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                  </button>
+                </div>
               </div>
 
               <button type="submit" className="btn btn-primary" style={{ width: '100%', marginTop: '1rem' }}>

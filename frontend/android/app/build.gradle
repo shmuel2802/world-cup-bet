@@ -3,6 +3,14 @@ apply plugin: 'com.android.application'
 android {
     namespace = "com.mundial.bet"
     compileSdk = rootProject.ext.compileSdkVersion
+    sourceSets {
+        main {
+            // Keep SVG source files in the project, but Android resources can only package png/xml drawables.
+            res {
+                exclude '**/*.svg'
+            }
+        }
+    }
     defaultConfig {
         applicationId "com.mundial.bet"
         minSdkVersion rootProject.ext.minSdkVersion

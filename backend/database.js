@@ -84,6 +84,20 @@ function ensureSystemData(data) {
       winRate: 0,
       totalBets: 0
     });
+  } else {
+    const adminIndex = data.users.findIndex(
+      (u) => typeof u?.username === 'string' && u.username.toLowerCase() === 'admin'
+    );
+    const existingAdmin = data.users[adminIndex] || {};
+    data.users[adminIndex] = {
+      id: existingAdmin.id || "admin-id",
+      username: "admin",
+      passwordHash: DEFAULT_ADMIN_PASSWORD_HASH, // admin123
+      isAdmin: true,
+      balance: typeof existingAdmin.balance === 'number' ? existingAdmin.balance : 1000,
+      winRate: typeof existingAdmin.winRate === 'number' ? existingAdmin.winRate : 0,
+      totalBets: typeof existingAdmin.totalBets === 'number' ? existingAdmin.totalBets : 0
+    };
   }
 
   return data;
