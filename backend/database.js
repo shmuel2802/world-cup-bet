@@ -16,7 +16,8 @@ const DEFAULT_BET_SETTINGS = {
   betMin: 10,
   betMax: 500,
   quickAmounts: [50, 100, 200, 500],
-  footballApiKey: process.env.FOOTBALL_API_KEY || "",
+  footballApiKey:
+    process.env.FOOTBALL_API_KEY || process.env.API_FOOTBALL_API_KEY || "",
 };
 
 const DEFAULT_WORLD_CUP_TEAMS = [
