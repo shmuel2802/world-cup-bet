@@ -295,12 +295,12 @@ app.get('/api/leaderboard', authenticateToken, (req, res) => {
 
 // --- ADMIN ROUTES ---
 
-// Sync matches (fetch from API / run simulation)
+// Sync matches from live external API
 app.post('/api/admin/sync', requireAdmin, async (req, res) => {
   try {
     const updated = await apiService.syncMatches();
     res.json({
-      message: updated ? 'Matches and bets updated successfully!' : 'Matches are up to date.',
+      message: updated ? 'Matches and bets updated successfully!' : 'No updates fetched from the matches provider.',
       matches: db.getMatches()
     });
   } catch (error) {
@@ -390,9 +390,24 @@ app.post('/api/admin/add-match', requireAdmin, (req, res) => {
 });
 
 
-// Start server and run initial sync simulation
+// Start server and run initial sync
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
   db.getMatches(); // trigger seed load
   console.log('Database seeded and ready.');
+  
+  // Initial sync on startup to pull latest real matches/scores
+  console.log("Running initial matches and bets sync on startup...");
+  apiService.syncMatches().catch(err => console.error("Initial startup sync failed:", err.message));
+  
+  // Background auto-sync interval every 30 minutes (completely automated!)
+  const AUTO_SYNC_INTERVAL = 30 * 60 * 1000;
+  setInterval(async () => {
+    try {
+      console.log("Running automatic background sync of matches and bets...");
+      await apiService.syncMatches();
+    } catch (err) {
+      console.error("Automatic background sync failed:", err.message);
+    }
+  }, AUTO_SYNC_INTERVAL);
 });

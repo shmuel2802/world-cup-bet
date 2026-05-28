@@ -9,11 +9,11 @@ class FootballApiService {
   // Fetch or update match data
   async syncMatches() {
     const settings = this.db.getSettings();
-    const apiKey = settings.footballApiKey;
+    const apiKey = process.env.FOOTBALL_API_KEY || settings.footballApiKey;
 
     if (!apiKey) {
-      console.log("No Football API Key configured. Running in dynamic Simulation Mode!");
-      return this.runSimulation();
+      console.log("No Football API Key configured. Skipping matches sync.");
+      return false;
     }
 
     try {
@@ -27,17 +27,20 @@ class FootballApiService {
       if (!externalMatches || !externalMatches.length) return false;
 
       const formattedMatches = externalMatches.map(m => {
+        const homeTla = (m.homeTeam?.tla || 'un').toLowerCase().slice(0, 2);
+        const awayTla = (m.awayTeam?.tla || 'un').toLowerCase().slice(0, 2);
+
         // Map API response to our database schema
         return {
           id: `real_${m.id}`,
-          homeTeam: m.homeTeam.name || m.homeTeam.shortName,
-          awayTeam: m.awayTeam.name || m.awayTeam.shortName,
-          homeFlag: m.homeTeam.crest || `https://flagcdn.com/w160/${(m.homeTeam.tla || 'ar').toLowerCase().slice(0, 2)}.png`,
-          awayFlag: m.awayTeam.crest || `https://flagcdn.com/w160/${(m.awayTeam.tla || 'fr').toLowerCase().slice(0, 2)}.png`,
+          homeTeam: m.homeTeam?.name || m.homeTeam?.shortName || 'TBD',
+          awayTeam: m.awayTeam?.name || m.awayTeam?.shortName || 'TBD',
+          homeFlag: m.homeTeam?.crest || `https://flagcdn.com/w160/${homeTla}.png`,
+          awayFlag: m.awayTeam?.crest || `https://flagcdn.com/w160/${awayTla}.png`,
           status: this.mapStatus(m.status),
           utcDate: m.utcDate,
-          homeScore: m.score.fullTime.home !== null ? m.score.fullTime.home : null,
-          awayScore: m.score.fullTime.away !== null ? m.score.fullTime.away : null,
+          homeScore: m.score?.fullTime?.home !== null && m.score?.fullTime?.home !== undefined ? m.score.fullTime.home : null,
+          awayScore: m.score?.fullTime?.away !== null && m.score?.fullTime?.away !== undefined ? m.score.fullTime.away : null,
           stage: this.translateStage(m.stage),
           homeOdds: 2.0, // Odds would be generated or constant since free APIs don't usually provide odds
           drawOdds: 3.2,
@@ -45,13 +48,12 @@ class FootballApiService {
         };
       });
 
-      this.db.saveMatchesBatch(formattedMatches);
+      this.db.replaceMatches(formattedMatches);
       this.resolveFinishedBets();
       return true;
     } catch (error) {
       console.error("Error syncing with Football API:", error.message);
-      // Fallback to simulation on API failure
-      return this.runSimulation();
+      return false;
     }
   }
 
@@ -77,6 +79,7 @@ class FootballApiService {
   translateStage(stage) {
     const stages = {
       'GROUP_STAGE': 'שלב הבתים',
+      'ROUND_OF_16': 'שמינית הגמר',
       'LAST_16': 'שמינית הגמר',
       'QUARTER_FINALS': 'רבע הגמר',
       'SEMI_FINALS': 'חצי הגמר',
@@ -84,44 +87,6 @@ class FootballApiService {
       'THIRD_PLACE': 'הקרב על המקום השלישי'
     };
     return stages[stage] || 'מונדיאל';
-  }
-
-  // Simulate scores and status updates for scheduled matches that are past their play date
-  runSimulation() {
-    const matches = this.db.getMatches();
-    const now = new Date();
-    let updated = false;
-
-    const updatedMatches = matches.map(match => {
-      const matchDate = new Date(match.utcDate);
-
-      // If scheduled and past the date, simulate a live match or finish it
-      if (match.status === 'SCHEDULED' && now >= matchDate) {
-        // Start as LIVE
-        match.status = 'LIVE';
-        match.homeScore = 0;
-        match.awayScore = 0;
-        updated = true;
-        console.log(`Match ${match.homeTeam} vs ${match.awayTeam} is now LIVE!`);
-      } else if (match.status === 'LIVE') {
-        // If it's live, simulate a random score and finish it (say, if it's been live for a while)
-        // For testing, matches stay live for 5 minutes, but here we'll just simulate realistic scores and complete it
-        const randomHome = Math.floor(Math.random() * 4); // 0-3 goals
-        const randomAway = Math.floor(Math.random() * 3); // 0-2 goals
-        match.homeScore = randomHome;
-        match.awayScore = randomAway;
-        match.status = 'FINISHED';
-        updated = true;
-        console.log(`Match ${match.homeTeam} vs ${match.awayTeam} FINISHED with score ${randomHome}-${randomAway}`);
-      }
-      return match;
-    });
-
-    if (updated) {
-      this.db.saveMatchesBatch(updatedMatches);
-      this.resolveFinishedBets();
-    }
-    return updated;
   }
 
   // Process all bets for matches that are FINISHED but bets are still PENDING

@@ -113,9 +113,11 @@ world-cup-bet/
    *   **Runtime:** `Node`
    *   **Build Command:** `npm install`
    *   **Start Command:** `node server.js`
-5. נווט ללשונית **Environment** (משתני סביבה) והוסף את המשתנה הבא:
+5. נווט ללשונית **Environment** (משתני סביבה) והוסף את המשתנים הבאים:
    *   **Key:** `CLOUD_DB_URL`
    *   **Value:** הכתובת המלאה שקיבלת מ-Firebase (כולל הסיומת `/data.json`).
+   *   **Key:** `FOOTBALL_API_KEY`
+   *   **Value:** מפתח API תקין של [Football-Data.org](https://www.football-data.org/) כדי למשוך תמיד את כל משחקי המונדיאל האמיתיים (כולל שלבי נוקאאוט עתידיים כשהם מתפרסמים).
 6. לחץ על **Deploy Web Service**. השרת שלך יעלה לאוויר ותקבל כתובת אינטרנט ציבורית מובטחת (למשל `https://world-cup-bet-server.onrender.com`).
 
 ---
