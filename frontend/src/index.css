@@ -277,6 +277,17 @@ header {
   transition: var(--transition-smooth);
 }
 
+.dark-select {
+  background: rgba(30, 34, 44, 0.96);
+  border-color: rgba(255, 255, 255, 0.18);
+  color: #f8fafc;
+}
+
+.dark-select option {
+  background: #111827;
+  color: #f8fafc;
+}
+
 .form-input:focus {
   outline: none;
   border-color: var(--primary);

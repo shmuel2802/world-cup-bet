@@ -7,7 +7,7 @@ class FootballApiService {
   }
 
   // Fetch or update match data
-  async syncMatches() {
+  async syncMatches(options = {}) {
     const settings = this.db.getSettings();
     const apiKey =
       process.env.FOOTBALL_API_KEY ||
@@ -22,8 +22,6 @@ class FootballApiService {
     }
 
     try {
-      // In a real environment, we would query the World Cup matches:
-      // HTTP GET api.football-data.org/v4/competitions/WC/matches
       const response = await axios.get(
         "https://api.football-data.org/v4/competitions/WC/matches",
         {
@@ -34,13 +32,20 @@ class FootballApiService {
       const externalMatches = response.data.matches;
       if (!externalMatches || !externalMatches.length) return false;
 
+      const existingMatches = this.db.getMatches();
+      const existingMatchById = new Map(
+        existingMatches.map((match) => [match.id, match]),
+      );
+
+      const scorerUpdates = [];
       const formattedMatches = externalMatches.map((m) => {
+        const matchId = `real_${m.id}`;
+        const previousMatch = existingMatchById.get(matchId);
         const homeTla = (m.homeTeam?.tla || "un").toLowerCase().slice(0, 2);
         const awayTla = (m.awayTeam?.tla || "un").toLowerCase().slice(0, 2);
 
-        // Map API response to our database schema
-        return {
-          id: `real_${m.id}`,
+        const mappedMatch = {
+          id: matchId,
           homeTeam: m.homeTeam?.name || m.homeTeam?.shortName || "TBD",
           awayTeam: m.awayTeam?.name || m.awayTeam?.shortName || "TBD",
           homeFlag:
@@ -60,19 +65,230 @@ class FootballApiService {
               ? m.score.fullTime.away
               : null,
           stage: this.translateStage(m.stage),
-          homeOdds: 2.0, // Odds would be generated or constant since free APIs don't usually provide odds
+          homeOdds: 2.0,
           drawOdds: 3.2,
           awayOdds: 2.8,
+          scorerSyncFingerprint: this.buildMatchSyncFingerprint(m),
         };
+
+        const mergedMatch = previousMatch
+          ? { ...previousMatch, ...mappedMatch }
+          : mappedMatch;
+
+        const shouldProcessScorers =
+          !previousMatch ||
+          previousMatch.scorerSyncFingerprint !==
+            mergedMatch.scorerSyncFingerprint;
+
+        if (shouldProcessScorers) {
+          const apiScorers = this.extractScorers(m);
+          if (apiScorers.length) {
+            scorerUpdates.push(
+              ...apiScorers.map((entry) => ({
+                ...entry,
+                matchId,
+                teamName: entry.teamName || entry.team || mergedMatch.homeTeam,
+              })),
+            );
+          } else if (Array.isArray(options.manualScorers)) {
+            scorerUpdates.push(
+              ...options.manualScorers.filter(
+                (entry) => entry.matchId === matchId,
+              ),
+            );
+          } else {
+            scorerUpdates.push(
+              ...this.buildFallbackScorers(mergedMatch, previousMatch),
+            );
+          }
+        }
+
+        return mergedMatch;
       });
 
       this.db.replaceMatches(formattedMatches);
+      if (scorerUpdates.length) {
+        this.updatePlayersFromScorers(scorerUpdates);
+      }
+      this.refreshTopScorers();
       this.resolveFinishedBets();
-      return true;
+
+      return {
+        success: true,
+        syncedMatches: formattedMatches.length,
+        scoredEntries: scorerUpdates.length,
+      };
     } catch (error) {
       console.error("Error syncing with Football API:", error.message);
       return false;
     }
+  }
+
+  extractScorers(match) {
+    const rawScorers =
+      match.scorers ||
+      match.goals ||
+      match.goalScorers ||
+      match.scorer ||
+      match.score?.scorers ||
+      [];
+
+    const flattenScorers = (payload) => {
+      if (!payload) return [];
+      if (Array.isArray(payload)) return payload;
+      if (typeof payload === "object") {
+        if (Array.isArray(payload.home) || Array.isArray(payload.away)) {
+          return [...(payload.home || []), ...(payload.away || [])];
+        }
+        return [payload];
+      }
+      return [];
+    };
+
+    const items = flattenScorers(rawScorers);
+    return items
+      .map((entry) => {
+        if (!entry) return null;
+        const playerName =
+          entry.player?.name ||
+          entry.name ||
+          entry.playerName ||
+          entry.scorer ||
+          entry.person?.name;
+        const teamName =
+          entry.team?.name || entry.teamName || entry.team || entry.side;
+        const goals =
+          typeof entry.goals === "number"
+            ? entry.goals
+            : typeof entry.goalCount === "number"
+              ? entry.goalCount
+              : 1;
+
+        if (!playerName) return null;
+        return {
+          playerId: entry.player?.id
+            ? `p_${entry.player.id}`
+            : this.normalizePlayerId(playerName),
+          playerName,
+          teamName: teamName || "Unknown",
+          goals,
+        };
+      })
+      .filter(Boolean);
+  }
+
+  normalizePlayerId(name) {
+    return `p_${name
+      .toString()
+      .toLowerCase()
+      .trim()
+      .replace(/[\s\W]+/g, "_")}`;
+  }
+
+  buildMatchSyncFingerprint(match) {
+    const home = match.score?.fullTime?.home ?? match.homeScore ?? "null";
+    const away = match.score?.fullTime?.away ?? match.awayScore ?? "null";
+    const scorerList = this.extractScorers(match)
+      .map((entry) => `${entry.playerName}:${entry.teamName}:${entry.goals}`)
+      .sort()
+      .join("|");
+    return `${match.id || "unknown"}:${home}-${away}:${match.status || ""}:${scorerList}`;
+  }
+
+  buildFallbackScorers(formattedMatch, previousMatch) {
+    const homeDelta = this.computeGoalDelta(
+      formattedMatch.homeScore,
+      previousMatch?.homeScore,
+    );
+    const awayDelta = this.computeGoalDelta(
+      formattedMatch.awayScore,
+      previousMatch?.awayScore,
+    );
+
+    return [
+      ...this.simulateTeamGoals(
+        formattedMatch.homeTeam,
+        homeDelta,
+        formattedMatch.id,
+      ),
+      ...this.simulateTeamGoals(
+        formattedMatch.awayTeam,
+        awayDelta,
+        formattedMatch.id,
+      ),
+    ];
+  }
+
+  computeGoalDelta(current, previous) {
+    if (current === null || current === undefined) return 0;
+    if (previous === null || previous === undefined) return current;
+    return Math.max(0, current - previous);
+  }
+
+  simulateTeamGoals(teamName, goals, matchId) {
+    if (!goals || goals <= 0) return [];
+    const teamPlayers = this.db
+      .getPlayers()
+      .filter((player) =>
+        player.team
+          ?.toLowerCase()
+          .includes(teamName?.toLowerCase().substring(0, 3)),
+      );
+    const candidates = teamPlayers.length
+      ? teamPlayers
+      : this.db.getPlayers().slice(0, 5);
+
+    if (!candidates.length) return [];
+    const simulated = [];
+    for (let i = 0; i < goals; i += 1) {
+      const player = candidates[i % candidates.length];
+      simulated.push({
+        matchId,
+        playerId: player.id,
+        playerName: player.name,
+        teamName: player.team,
+        increment: 1,
+        fallback: true,
+      });
+    }
+    return simulated;
+  }
+
+  updatePlayersFromScorers(entries) {
+    entries.forEach((entry) => {
+      const existing = this.db.getPlayerById(entry.playerId);
+      const player = existing
+        ? { ...existing }
+        : {
+            id: entry.playerId,
+            name: entry.playerName,
+            team: entry.teamName || "Unknown",
+            goals_scored: 0,
+          };
+
+      const currentGoals = Number(player.goals_scored) || 0;
+      if (typeof entry.goals === "number") {
+        player.goals_scored = Math.max(currentGoals, entry.goals);
+      } else if (typeof entry.increment === "number") {
+        player.goals_scored = currentGoals + entry.increment;
+      } else {
+        player.goals_scored = currentGoals + 1;
+      }
+
+      this.db.savePlayer(player);
+    });
+  }
+
+  refreshTopScorers() {
+    const players = this.db
+      .getPlayers()
+      .slice()
+      .sort(
+        (a, b) =>
+          b.goals_scored - a.goals_scored || a.name.localeCompare(b.name),
+      );
+    const topScorers = players.filter((p) => p.goals_scored > 0).slice(0, 15);
+    this.db.setTopScorers(topScorers);
   }
 
   // Maps external status to our status: SCHEDULED, LIVE, FINISHED

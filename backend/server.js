@@ -400,12 +400,25 @@ app.post("/api/admin/bet-settings", requireAdmin, (req, res) => {
 // Sync matches from live external API
 app.post("/api/admin/sync", requireAdmin, async (req, res) => {
   try {
-    const updated = await apiService.syncMatches();
+    const manualScorers = Array.isArray(req.body?.manualScorers)
+      ? req.body.manualScorers
+      : [];
+
+    const syncResult = await apiService.syncMatches({ manualScorers });
+    if (!syncResult) {
+      return res.status(500).json({
+        message:
+          "Could not sync matches. Check your FOOTBALL_API_KEY or the external API availability.",
+      });
+    }
+
     res.json({
-      message: updated
-        ? "Matches and bets updated successfully!"
+      message: syncResult.success
+        ? `Sync completed: ${syncResult.syncedMatches} matches and ${syncResult.scoredEntries} scorer records processed.`
         : "No updates fetched from the matches provider.",
+      result: syncResult,
       matches: db.getMatches(),
+      topScorers: db.getTopScorers(),
     });
   } catch (error) {
     res.status(500).json({ message: "Sync failed.", error: error.message });
@@ -560,7 +573,7 @@ app.get("/api/world-cup/players", authenticateToken, (req, res) => {
 app.get("/api/matches/sync", requireAdmin, async (req, res) => {
   try {
     const synced = await apiService.syncMatches();
-    if (synced) {
+    if (synced && synced.success) {
       const matches = db.getMatches();
       return res.json({
         message: "Matches synced successfully from API",
@@ -617,10 +630,27 @@ app.listen(PORT, "0.0.0.0", () => {
   const AUTO_SYNC_INTERVAL = 30 * 60 * 1000;
   setInterval(async () => {
     try {
-      console.log("🔄 Running automatic background sync of matches and bets...");
+      console.log(
+        "🔄 Running automatic background sync of matches and bets...",
+      );
       await apiService.syncMatches();
     } catch (err) {
       console.error("Automatic background sync failed:", err.message);
     }
   }, AUTO_SYNC_INTERVAL);
+
+  const LIVE_POLL_INTERVAL = 3 * 60 * 1000;
+  setInterval(async () => {
+    const hasLiveMatch = db
+      .getMatches()
+      .some((match) => match.status === "LIVE");
+    if (!hasLiveMatch) return;
+
+    try {
+      console.log("⏱️ Live game detected. Polling API for updated scores...");
+      await apiService.syncMatches();
+    } catch (err) {
+      console.error("Live poll sync failed:", err.message);
+    }
+  }, LIVE_POLL_INTERVAL);
 });

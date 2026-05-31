@@ -72,6 +72,7 @@ function App() {
   const [settingsQuickAmounts, setSettingsQuickAmounts] =
     useState("50,100,200,500");
   const [loading, setLoading] = useState(false);
+  const [syncLoading, setSyncLoading] = useState(false);
   const [message, setMessage] = useState({ text: "", type: "" });
 
   // Bet Slip drawer state
@@ -362,21 +363,28 @@ function App() {
 
   // --- Admin Handlers ---
   const triggerAutoSync = async () => {
+    setSyncLoading(true);
     try {
       const res = await fetch(`${API_URL}/admin/sync`, {
         method: "POST",
-        headers: { Authorization: `Bearer ${token}` },
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({}),
       });
       const data = await res.json();
       if (res.ok) {
-        showToast(data.message);
+        showToast(data.message || "סנכרון הושלם בהצלחה! כעת הנתונים מתעדכנים.");
         fetchData();
         fetchProfile();
       } else {
-        showToast(data.message, "error");
+        showToast(data.message || "שגיאה בסנכרון ה-API", "error");
       }
     } catch (err) {
       showToast("שגיאה בסנכרון ה-API", "error");
+    } finally {
+      setSyncLoading(false);
     }
   };
 
@@ -1354,7 +1362,7 @@ function App() {
                   <div className="form-group">
                     <label>נבחרת שתיקח את המונדיאל</label>
                     <select
-                      className="form-input"
+                      className="form-input dark-select"
                       value={predictionWinner}
                       onChange={(e) => setPredictionWinner(e.target.value)}
                     >
@@ -1370,7 +1378,7 @@ function App() {
                   <div className="form-group">
                     <label>מלך השערים של המונדיאל</label>
                     <select
-                      className="form-input"
+                      className="form-input dark-select"
                       value={predictionTopScorer}
                       onChange={(e) => setPredictionTopScorer(e.target.value)}
                     >
@@ -1433,9 +1441,14 @@ function App() {
                   כל המשחקים, הזמנים והתוצאות האמיתיים. במידה ולא מוגדר מפתח
                   API, השרת יסמלץ התקדמות משחקים ותוצאות באופן חכם!
                 </p>
-                <button onClick={triggerAutoSync} className="btn btn-accent">
+                <button
+                  onClick={triggerAutoSync}
+                  className="btn btn-accent"
+                  disabled={syncLoading}
+                  style={{ opacity: syncLoading ? 0.75 : 1 }}
+                >
                   <RefreshCw size={18} />
-                  סנכרן ועדכן נתונים עכשיו
+                  {syncLoading ? "מתבצע סנכרון..." : "סנכרן ועדכן נתונים עכשיו"}
                 </button>
               </div>
 

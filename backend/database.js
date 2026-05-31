@@ -202,6 +202,7 @@ function getSeedData() {
     },
     worldCupTeams: DEFAULT_WORLD_CUP_TEAMS,
     worldCupPlayers: DEFAULT_WORLD_CUP_PLAYERS,
+    topScorers: [],
     predictions: [],
   };
   return seedData;
@@ -217,6 +218,14 @@ function ensureSystemData(data) {
     data.worldCupTeams = DEFAULT_WORLD_CUP_TEAMS;
   if (!Array.isArray(data.worldCupPlayers))
     data.worldCupPlayers = DEFAULT_WORLD_CUP_PLAYERS;
+
+  data.worldCupPlayers = data.worldCupPlayers.map((player) => ({
+    ...player,
+    goals_scored:
+      typeof player.goals_scored === "number" ? player.goals_scored : 0,
+  }));
+
+  if (!Array.isArray(data.topScorers)) data.topScorers = [];
   if (!Array.isArray(data.predictions)) data.predictions = [];
   if (!data.settings || typeof data.settings !== "object") {
     data.settings = {};
@@ -473,6 +482,41 @@ const db = {
 
   getTeams: () => readDb().worldCupTeams,
   getPlayers: () => readDb().worldCupPlayers,
+  getPlayerById: (playerId) =>
+    readDb().worldCupPlayers.find((player) => player.id === playerId),
+  savePlayer: (player) => {
+    const data = readDb();
+    const index = data.worldCupPlayers.findIndex((p) => p.id === player.id);
+    if (index !== -1) {
+      data.worldCupPlayers[index] = { ...data.worldCupPlayers[index], ...player };
+    } else {
+      data.worldCupPlayers.push({ ...player });
+    }
+    writeDb(data);
+    return player;
+  },
+  savePlayersBatch: (playersArray) => {
+    const data = readDb();
+    playersArray.forEach((incoming) => {
+      const index = data.worldCupPlayers.findIndex((p) => p.id === incoming.id);
+      if (index !== -1) {
+        data.worldCupPlayers[index] = {
+          ...data.worldCupPlayers[index],
+          ...incoming,
+        };
+      } else {
+        data.worldCupPlayers.push({ ...incoming });
+      }
+    });
+    writeDb(data);
+  },
+  getTopScorers: () => readDb().topScorers,
+  setTopScorers: (scorers) => {
+    const data = readDb();
+    data.topScorers = Array.isArray(scorers) ? scorers : [];
+    writeDb(data);
+    return data.topScorers;
+  },
   getPredictions: () => readDb().predictions,
   getPredictionByUserId: (userId) =>
     readDb().predictions.find((p) => p.userId === userId),
