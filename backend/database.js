@@ -202,6 +202,7 @@ function getSeedData() {
     },
     worldCupTeams: DEFAULT_WORLD_CUP_TEAMS,
     worldCupPlayers: DEFAULT_WORLD_CUP_PLAYERS,
+    players: DEFAULT_WORLD_CUP_PLAYERS,
     topScorers: [],
     predictions: [],
   };
@@ -219,11 +220,16 @@ function ensureSystemData(data) {
   if (!Array.isArray(data.worldCupPlayers))
     data.worldCupPlayers = DEFAULT_WORLD_CUP_PLAYERS;
 
-  data.worldCupPlayers = data.worldCupPlayers.map((player) => ({
+  if (!Array.isArray(data.players)) data.players = data.worldCupPlayers;
+  if (!Array.isArray(data.worldCupPlayers)) data.worldCupPlayers = data.players;
+  data.players = data.worldCupPlayers;
+
+  data.players = data.players.map((player) => ({
     ...player,
     goals_scored:
       typeof player.goals_scored === "number" ? player.goals_scored : 0,
   }));
+  data.worldCupPlayers = data.players;
 
   if (!Array.isArray(data.topScorers)) data.topScorers = [];
   if (!Array.isArray(data.predictions)) data.predictions = [];
@@ -481,33 +487,35 @@ const db = {
   },
 
   getTeams: () => readDb().worldCupTeams,
-  getPlayers: () => readDb().worldCupPlayers,
+  getPlayers: () => readDb().players,
   getPlayerById: (playerId) =>
-    readDb().worldCupPlayers.find((player) => player.id === playerId),
+    readDb().players.find((player) => player.id === playerId),
   savePlayer: (player) => {
     const data = readDb();
-    const index = data.worldCupPlayers.findIndex((p) => p.id === player.id);
+    const index = data.players.findIndex((p) => p.id === player.id);
     if (index !== -1) {
-      data.worldCupPlayers[index] = { ...data.worldCupPlayers[index], ...player };
+      data.players[index] = { ...data.players[index], ...player };
     } else {
-      data.worldCupPlayers.push({ ...player });
+      data.players.push({ ...player });
     }
+    data.worldCupPlayers = data.players;
     writeDb(data);
     return player;
   },
   savePlayersBatch: (playersArray) => {
     const data = readDb();
     playersArray.forEach((incoming) => {
-      const index = data.worldCupPlayers.findIndex((p) => p.id === incoming.id);
+      const index = data.players.findIndex((p) => p.id === incoming.id);
       if (index !== -1) {
-        data.worldCupPlayers[index] = {
-          ...data.worldCupPlayers[index],
+        data.players[index] = {
+          ...data.players[index],
           ...incoming,
         };
       } else {
-        data.worldCupPlayers.push({ ...incoming });
+        data.players.push({ ...incoming });
       }
     });
+    data.worldCupPlayers = data.players;
     writeDb(data);
   },
   getTopScorers: () => readDb().topScorers,

@@ -1445,9 +1445,12 @@ function App() {
                   onClick={triggerAutoSync}
                   className="btn btn-accent"
                   disabled={syncLoading}
-                  style={{ opacity: syncLoading ? 0.75 : 1 }}
+                  style={{
+                    opacity: syncLoading ? 0.75 : 1,
+                    pointerEvents: syncLoading ? "none" : "auto",
+                  }}
                 >
-                  <RefreshCw size={18} />
+                  <RefreshCw size={18} className={syncLoading ? "spin-icon" : ""} />
                   {syncLoading ? "מתבצע סנכרון..." : "סנכרן ועדכן נתונים עכשיו"}
                 </button>
               </div>

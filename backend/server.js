@@ -545,6 +545,7 @@ app.post("/api/admin/add-match", requireAdmin, (req, res) => {
     homeOdds: parseFloat(homeOdds) || 2.0,
     drawOdds: parseFloat(drawOdds) || 3.0,
     awayOdds: parseFloat(awayOdds) || 2.5,
+    source: "custom",
   };
 
   db.saveMatch(newMatch);
@@ -566,7 +567,12 @@ app.get("/api/world-cup/teams", authenticateToken, (req, res) => {
 // Get all World Cup players
 app.get("/api/world-cup/players", authenticateToken, (req, res) => {
   const data = db.readDb();
-  res.json(data.worldCupPlayers || []);
+  res.json(data.players || []);
+});
+
+// Get current top scorers
+app.get("/api/world-cup/top-scorers", authenticateToken, (req, res) => {
+  res.json(db.getTopScorers() || []);
 });
 
 // Sync matches from external API (admin only)

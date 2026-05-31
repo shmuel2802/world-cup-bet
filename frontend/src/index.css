@@ -278,13 +278,14 @@ header {
 }
 
 .dark-select {
-  background: #0b0d14 !important;
-  border: 1px solid rgba(255, 255, 255, 0.15) !important;
-  color: #f3f4f6 !important;
-  border-radius: 12px !important;
-  padding: 0.75rem 1rem !important;
+  background: #05070f !important;
+  border: 1px solid rgba(255, 255, 255, 0.12) !important;
+  color: #e5e7eb !important;
+  border-radius: 14px !important;
+  padding: 0.85rem 1rem !important;
   font-family: var(--font-sans) !important;
   cursor: pointer;
+  box-shadow: inset 0 0 15px rgba(0, 0, 0, 0.3);
   transition: var(--transition-smooth);
 }
 
@@ -295,9 +296,22 @@ header {
 }
 
 .dark-select option {
-  background: #07080b !important; /* Pitch black for options dropdown */
+  background: #05070f !important;
   color: #f3f4f6 !important;
   padding: 10px !important;
+}
+
+.spin-icon {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .form-input:focus {

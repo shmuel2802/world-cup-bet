@@ -58,16 +58,17 @@ class FootballApiService {
             m.score?.fullTime?.home !== null &&
             m.score?.fullTime?.home !== undefined
               ? m.score.fullTime.home
-              : null,
+              : m.score?.halfTime?.home ?? null,
           awayScore:
             m.score?.fullTime?.away !== null &&
             m.score?.fullTime?.away !== undefined
               ? m.score.fullTime.away
-              : null,
+              : m.score?.halfTime?.away ?? null,
           stage: this.translateStage(m.stage),
           homeOdds: 2.0,
           drawOdds: 3.2,
           awayOdds: 2.8,
+          source: "football-data",
           scorerSyncFingerprint: this.buildMatchSyncFingerprint(m),
         };
 
