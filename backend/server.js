@@ -601,13 +601,14 @@ app.patch("/api/admin/matches/:id", requireAdmin, (req, res) => {
 });
 
 // Start server and run initial sync
-app.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT}`);
+app.listen(PORT, "0.0.0.0", () => {
+  console.log(`✅ World Cup Bet Server is LIVE on port ${PORT}`);
+  console.log(`📡 Listening on all interfaces (0.0.0.0:${PORT})`);
   db.getMatches(); // trigger seed load
-  console.log("Database seeded and ready.");
+  console.log("🗄️ Database seeded and ready.");
 
   // Initial sync on startup to pull latest real matches/scores
-  console.log("Running initial matches and bets sync on startup...");
+  console.log("🔄 Running initial matches and bets sync on startup...");
   apiService
     .syncMatches()
     .catch((err) => console.error("Initial startup sync failed:", err.message));
@@ -616,7 +617,7 @@ app.listen(PORT, () => {
   const AUTO_SYNC_INTERVAL = 30 * 60 * 1000;
   setInterval(async () => {
     try {
-      console.log("Running automatic background sync of matches and bets...");
+      console.log("🔄 Running automatic background sync of matches and bets...");
       await apiService.syncMatches();
     } catch (err) {
       console.error("Automatic background sync failed:", err.message);
