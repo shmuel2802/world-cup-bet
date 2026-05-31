@@ -7,6 +7,12 @@ services:
     buildCommand: npm install
     startCommand: node server.js
     envVars:
+      - key: FOOTBALL_API_KEY
+        sync: false
+        description: "Football-Data.org API key from https://www.football-data.org/"
+      - key: JWT_SECRET
+        sync: false
+        description: "Secure random string for JWT token signing"
       - key: CLOUD_DB_URL
         sync: false
-        description: "The full Firebase Realtime Database REST URL with /data.json at the end"
+        description: "The full Firebase Realtime Database REST URL with /data.json at the end (optional)"
