@@ -29,8 +29,18 @@ const API_URL =
 
 function App() {
   // Auth State
-  const [token, setToken] = useState(localStorage.getItem("token") || "");
-  const [user, setUser] = useState(null);
+  const [token, setToken] = useState(() => {
+    if (typeof window === "undefined") return "";
+    return localStorage.getItem("token") || "";
+  });
+  const [user, setUser] = useState(() => {
+    if (typeof window === "undefined") return null;
+    try {
+      return JSON.parse(localStorage.getItem("user") || "null");
+    } catch (err) {
+      return null;
+    }
+  });
   const [authMode, setAuthMode] = useState("login"); // login or register
   const [usernameInput, setUsernameInput] = useState("");
   const [passwordInput, setPasswordInput] = useState("");
@@ -129,6 +139,7 @@ function App() {
       const data = await res.json();
       if (res.ok) {
         setUser(data);
+        localStorage.setItem("user", JSON.stringify(data));
       } else {
         // Token might have expired
         handleLogout();
@@ -264,6 +275,8 @@ function App() {
       if (res.ok) {
         setToken(data.token);
         setUser(data.user);
+        localStorage.setItem("token", data.token);
+        localStorage.setItem("user", JSON.stringify(data.user));
         setUsernameInput("");
         setPasswordInput("");
         showToast(
@@ -283,6 +296,7 @@ function App() {
     setToken("");
     setUser(null);
     localStorage.removeItem("token");
+    localStorage.removeItem("user");
     showToast("התנתקת בהצלחה. נתראה במגרש!", "info");
   };
 
