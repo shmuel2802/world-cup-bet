@@ -278,14 +278,26 @@ header {
 }
 
 .dark-select {
-  background: rgba(30, 34, 44, 0.96);
-  border-color: rgba(255, 255, 255, 0.18);
-  color: #f8fafc;
+  background: #0b0d14 !important;
+  border: 1px solid rgba(255, 255, 255, 0.15) !important;
+  color: #f3f4f6 !important;
+  border-radius: 12px !important;
+  padding: 0.75rem 1rem !important;
+  font-family: var(--font-sans) !important;
+  cursor: pointer;
+  transition: var(--transition-smooth);
+}
+
+.dark-select:focus {
+  border-color: var(--primary) !important;
+  box-shadow: 0 0 10px var(--primary-glow) !important;
+  outline: none;
 }
 
 .dark-select option {
-  background: #111827;
-  color: #f8fafc;
+  background: #07080b !important; /* Pitch black for options dropdown */
+  color: #f3f4f6 !important;
+  padding: 10px !important;
 }
 
 .form-input:focus {
