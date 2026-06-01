@@ -463,6 +463,7 @@ const db = {
   },
 
   getBets: () => readDb().bets,
+  getBetById: (betId) => readDb().bets.find((b) => b.id === betId),
   getBetsByUserId: (userId) => readDb().bets.filter((b) => b.userId === userId),
   getBetsByMatchId: (matchId) =>
     readDb().bets.filter((b) => b.matchId === matchId),
@@ -517,6 +518,12 @@ const db = {
     });
     data.worldCupPlayers = data.players;
     writeDb(data);
+  },
+  saveTeams: (teamsArray) => {
+    const data = readDb();
+    data.worldCupTeams = Array.isArray(teamsArray) ? teamsArray : [];
+    writeDb(data);
+    return data.worldCupTeams;
   },
   getTopScorers: () => readDb().topScorers,
   setTopScorers: (scorers) => {

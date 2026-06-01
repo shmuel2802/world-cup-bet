@@ -304,6 +304,63 @@ app.post("/api/bets", authenticateToken, (req, res) => {
   });
 });
 
+// Update an existing bet before the match starts
+app.put("/api/bets/:betId", authenticateToken, (req, res) => {
+  const { betId } = req.params;
+  const { betType, amount, predictedHomeScore, predictedAwayScore } = req.body;
+  const userId = req.user.id;
+
+  if (!betType || !amount || amount <= 0) {
+    return res
+      .status(400)
+      .json({ message: "Invalid bet update details. Amount must be greater than 0." });
+  }
+
+  const existingBet = db.getBetById(betId);
+  if (!existingBet || existingBet.userId !== userId) {
+    return res.status(404).json({ message: "Bet not found." });
+  }
+
+  const match = db.getMatchById(existingBet.matchId);
+  if (!match) {
+    return res.status(404).json({ message: "Match not found." });
+  }
+
+  if (match.status !== "SCHEDULED" || new Date() >= new Date(match.utcDate)) {
+    return res.status(400).json({
+      message: "Cannot update bet. The match has already started or finished.",
+    });
+  }
+
+  const user = db.getUserById(userId);
+  const amountDelta = parseInt(amount, 10) - existingBet.amount;
+
+  if (amountDelta > 0 && user.balance < amountDelta) {
+    return res
+      .status(400)
+      .json({ message: "Insufficient balance to increase the bet amount." });
+  }
+
+  const updatedBet = {
+    ...existingBet,
+    betType,
+    amount: parseInt(amount, 10),
+    predictedHomeScore: betType === "EXACT_SCORE" ? parseInt(predictedHomeScore) : null,
+    predictedAwayScore: betType === "EXACT_SCORE" ? parseInt(predictedAwayScore) : null,
+    updatedAt: new Date().toISOString(),
+  };
+
+  user.balance -= amountDelta;
+  db.saveUser(user);
+  db.saveBet(updatedBet);
+
+  res.json({
+    message: "Bet updated successfully!",
+    newBalance: user.balance,
+    bet: updatedBet,
+  });
+});
+
 // --- LEADERBOARD ROUTE ---
 
 app.get("/api/leaderboard", authenticateToken, (req, res) => {
@@ -342,6 +399,14 @@ app.get("/api/predictions", authenticateToken, (req, res) => {
 
 app.post("/api/predictions", authenticateToken, (req, res) => {
   const { winnerTeam, topScorer } = req.body;
+  const predictionLockDate = new Date("2026-06-11T00:00:00Z");
+
+  if (new Date() >= predictionLockDate) {
+    return res.status(403).json({
+      message: "ניחושים נעולים מאז 11.6.26. לא ניתן לשנות את המניחושים.",
+    });
+  }
+
   if (!winnerTeam || !topScorer) {
     return res
       .status(400)
@@ -352,13 +417,12 @@ app.post("/api/predictions", authenticateToken, (req, res) => {
     userId: req.user.id,
     winnerTeam,
     topScorer,
+    payoutMultiplier: 10,
   });
 
   res.json({
     message: "Prediction saved successfully!",
     prediction: updatedPrediction,
-  });
-});
 
 app.get("/api/admin/users", requireAdmin, (req, res) => {
   const users = db.getUsers().map((u) => ({

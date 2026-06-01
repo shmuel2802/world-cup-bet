@@ -21,11 +21,9 @@ import {
 } from "lucide-react";
 
 const API_URL =
-  typeof window !== "undefined" &&
-  (window.location.hostname === "localhost" ||
-    window.location.hostname === "127.0.0.1")
-    ? "http://localhost:5000/api"
-    : "https://world-cup-bet.onrender.com/api";
+  import.meta.env.VITE_API_URL ||
+  "https://world-cup-bet-server.onrender.com/api";
+const PREDICTION_LOCK_DATE = new Date("2026-06-11T00:00:00Z");
 
 function App() {
   // Auth State
@@ -77,6 +75,7 @@ function App() {
 
   // Bet Slip drawer state
   const [betSlipMatch, setBetSlipMatch] = useState(null);
+  const [editingBetId, setEditingBetId] = useState(null);
   const [betType, setBetType] = useState("HOME"); // HOME, DRAW, AWAY, EXACT_SCORE
   const [betAmount, setBetAmount] = useState(100);
   const [predHome, setPredHome] = useState(0);
@@ -302,16 +301,20 @@ function App() {
   };
 
   // --- Betting Handlers ---
-  const openBetSlip = (match) => {
+  const openBetSlip = (match, bet = null) => {
     if (match.status !== "SCHEDULED" || new Date() >= new Date(match.utcDate)) {
       showToast("המשחק כבר התחיל או הסתיים! לא ניתן להמר.", "error");
       return;
     }
+
     setBetSlipMatch(match);
-    setBetType("HOME");
-    setBetAmount(Math.min(user.balance, betSettings.betMax || 500));
-    setPredHome(0);
-    setPredAway(0);
+    setEditingBetId(bet ? bet.id : null);
+    setBetType(bet?.betType || "HOME");
+    setBetAmount(
+      bet?.amount || Math.min(user.balance, betSettings.betMax || 500),
+    );
+    setPredHome(bet?.predictedHomeScore ?? 0);
+    setPredAway(bet?.predictedAwayScore ?? 0);
   };
 
   const placeBet = async () => {
@@ -326,14 +329,27 @@ function App() {
       );
       return;
     }
-    if (betAmount > user.balance) {
+
+    if (editingBetId) {
+      const currentBetAmount = betSlipMatch?.myBet?.amount || 0;
+      const amountDelta = betAmount - currentBetAmount;
+      if (amountDelta > user.balance) {
+        showToast("אין לך מספיק מטבעות כדי להגדיל את ההימור", "error");
+        return;
+      }
+    } else if (betAmount > user.balance) {
       showToast("אין לך מספיק מטבעות! הזן סכום נמוך יותר.", "error");
       return;
     }
 
+    const endpoint = editingBetId
+      ? `${API_URL}/bets/${editingBetId}`
+      : `${API_URL}/bets`;
+    const method = editingBetId ? "PUT" : "POST";
+
     try {
-      const res = await fetch(`${API_URL}/bets`, {
-        method: "POST",
+      const res = await fetch(endpoint, {
+        method,
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
@@ -349,8 +365,13 @@ function App() {
       const data = await res.json();
 
       if (res.ok) {
-        showToast("ההימור שלך נקלט בהצלחה! בהצלחה במשחק ⚽🔥");
+        showToast(
+          editingBetId
+            ? "הימור עודכן בהצלחה!"
+            : "ההימור שלך נקלט בהצלחה! בהצלחה במשחק ⚽🔥",
+        );
         setBetSlipMatch(null);
+        setEditingBetId(null);
         fetchProfile(); // update balance
         fetchData(); // reload games and history
       } else {
@@ -544,6 +565,15 @@ function App() {
 
   const handlePredictionSubmit = async (e) => {
     e.preventDefault();
+
+    if (new Date() >= PREDICTION_LOCK_DATE) {
+      showToast(
+        "ניחושים נעולים מאז תחילת המונדיאל 11.6.26. לא ניתן לשנות.",
+        "error",
+      );
+      return;
+    }
+
     if (!predictionWinner || !predictionTopScorer) {
       showToast("אנא בחר מנצחת ומלך שערים", "error");
       return;
@@ -572,6 +602,8 @@ function App() {
       showToast("שגיאה בתקשורת עם השרת", "error");
     }
   };
+
+  const isPredictionLocked = new Date() >= PREDICTION_LOCK_DATE;
 
   const handleSyncMatchesFromAPI = async () => {
     if (!user.isAdmin) return;
@@ -997,36 +1029,67 @@ function App() {
                           <div
                             style={{
                               display: "flex",
-                              alignItems: "center",
-                              gap: "0.5rem",
+                              flexDirection: "column",
+                              gap: "0.75rem",
                             }}
                           >
-                            <Check
-                              size={16}
-                              style={{ color: "var(--primary)" }}
-                            />
-                            <span>
-                              ההימור שלך:{" "}
-                              <strong>
-                                {getBetTypeLabel(
-                                  match.myBet.betType,
-                                  match.myBet.predictedHomeScore,
-                                  match.myBet.predictedAwayScore,
+                            <div
+                              style={{
+                                display: "flex",
+                                alignItems: "center",
+                                gap: "0.5rem",
+                              }}
+                            >
+                              <Check
+                                size={16}
+                                style={{ color: "var(--primary)" }}
+                              />
+                              <span>
+                                ההימור שלך:{" "}
+                                <strong>
+                                  {getBetTypeLabel(
+                                    match.myBet.betType,
+                                    match.myBet.predictedHomeScore,
+                                    match.myBet.predictedAwayScore,
+                                  )}
+                                </strong>{" "}
+                                (השקעת {match.myBet.amount} מטבעות)
+                              </span>
+                            </div>
+
+                            <div
+                              style={{
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "space-between",
+                                gap: "0.75rem",
+                                flexWrap: "wrap",
+                              }}
+                            >
+                              <span
+                                className={`my-bet-payout ${match.myBet.status.toLowerCase()}`}
+                              >
+                                {match.myBet.status === "PENDING" &&
+                                  "ממתין לתוצאה...⏳"}
+                                {match.myBet.status === "WON" &&
+                                  `זכית! +${match.myBet.payout} מטבעות 🏆`}
+                                {match.myBet.status === "LOST" &&
+                                  "ההימור לא פגע... ❌"}
+                              </span>
+                              {match.status === "SCHEDULED" &&
+                                new Date() < new Date(match.utcDate) && (
+                                  <button
+                                    className="btn btn-secondary"
+                                    onClick={() =>
+                                      openBetSlip(match, match.myBet)
+                                    }
+                                    style={{ padding: "0.55rem 0.9rem" }}
+                                  >
+                                    עדכן הימור
+                                  </button>
                                 )}
-                              </strong>{" "}
-                              (השקעת {match.myBet.amount} מטבעות)
-                            </span>
+                            </div>
                           </div>
-                          <span
-                            className={`my-bet-payout ${match.myBet.status.toLowerCase()}`}
-                          >
-                            {match.myBet.status === "PENDING" &&
-                              "ממתין לתוצאה...⏳"}
-                            {match.myBet.status === "WON" &&
-                              `זכית! +${match.myBet.payout} מטבעות 🏆`}
-                            {match.myBet.status === "LOST" &&
-                              "ההימור לא פגע... ❌"}
-                          </span>
                         </div>
                       ) : (
                         // If no bet and scheduled, allow betting
@@ -1354,6 +1417,7 @@ function App() {
                   }}
                 >
                   ניחש את הנבחרת שתזכה במונדיאל ואת השחקן שיסיים כמלך שערים.
+                  זכייה בניחוש היא פי 10 מההימור! הניחושים ננעלים החל מ-11.6.26.
                 </p>
                 <form
                   onSubmit={handlePredictionSubmit}
@@ -1391,8 +1455,16 @@ function App() {
                     </select>
                   </div>
 
-                  <button type="submit" className="btn btn-primary">
-                    שמור ניחוש
+                  <button
+                    type="submit"
+                    className="btn btn-primary"
+                    disabled={isPredictionLocked}
+                    style={{
+                      opacity: isPredictionLocked ? 0.55 : 1,
+                      cursor: isPredictionLocked ? "not-allowed" : "pointer",
+                    }}
+                  >
+                    {isPredictionLocked ? "הניחושים נעולים" : "שמור ניחוש"}
                   </button>
                 </form>
 
@@ -1450,7 +1522,10 @@ function App() {
                     pointerEvents: syncLoading ? "none" : "auto",
                   }}
                 >
-                  <RefreshCw size={18} className={syncLoading ? "spin-icon" : ""} />
+                  <RefreshCw
+                    size={18}
+                    className={syncLoading ? "spin-icon" : ""}
+                  />
                   {syncLoading ? "מתבצע סנכרון..." : "סנכרן ועדכן נתונים עכשיו"}
                 </button>
               </div>
@@ -2097,9 +2172,12 @@ function App() {
             style={{ direction: "rtl" }}
           >
             <div className="betslip-header">
-              <h3>שליחת הימור חדש</h3>
+              <h3>{editingBetId ? "עדכון הימור קיים" : "שליחת הימור חדש"}</h3>
               <button
-                onClick={() => setBetSlipMatch(null)}
+                onClick={() => {
+                  setBetSlipMatch(null);
+                  setEditingBetId(null);
+                }}
                 style={{
                   background: "none",
                   border: "none",
@@ -2317,7 +2395,9 @@ function App() {
               onClick={placeBet}
             >
               <Coins size={20} />
-              שלח הימור של {betAmount} מטבעות
+              {editingBetId
+                ? `עדכן הימור של ${betAmount} מטבעות`
+                : `שלח הימור של ${betAmount} מטבעות`}
             </button>
           </div>
         </div>

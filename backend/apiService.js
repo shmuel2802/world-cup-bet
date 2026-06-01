@@ -22,14 +22,30 @@ class FootballApiService {
     }
 
     try {
-      const response = await axios.get(
-        "https://api.football-data.org/v4/competitions/WC/matches",
-        {
+      const [matchesResponse, teamsResponse] = await Promise.all([
+        axios.get("https://api.football-data.org/v4/competitions/WC/matches", {
           headers: { "X-Auth-Token": apiKey },
-        },
-      );
+        }),
+        axios.get("https://api.football-data.org/v4/competitions/WC/teams", {
+          headers: { "X-Auth-Token": apiKey },
+        }),
+      ]);
 
-      const externalMatches = response.data.matches;
+      const externalMatches = matchesResponse.data.matches;
+      const externalTeams = teamsResponse?.data?.teams || [];
+
+      if (Array.isArray(externalTeams) && externalTeams.length) {
+        const apiTeams = externalTeams.map((team) => {
+          const tla = (team.tla || team.name || "").toLowerCase().slice(0, 2);
+          return {
+            id: `team_${team.id}`,
+            name: team.name || team.shortName || team.crest || "TBD",
+            flag:
+              team.crest || `https://flagcdn.com/w160/${tla}.png`,
+          };
+        });
+        this.db.saveTeams(apiTeams);
+      }
       if (!externalMatches || !externalMatches.length) return false;
 
       const existingMatches = this.db.getMatches();

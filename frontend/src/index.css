@@ -699,6 +699,9 @@ header {
 
 .betslip-drawer {
   width: min(520px, 100%);
+  max-width: 520px;
+  margin: 0 1rem;
+  box-sizing: border-box;
   background: var(--bg-surface-opaque);
   border-radius: 24px;
   padding: 2rem;
