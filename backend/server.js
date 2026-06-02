@@ -313,7 +313,9 @@ app.put("/api/bets/:betId", authenticateToken, (req, res) => {
   if (!betType || !amount || amount <= 0) {
     return res
       .status(400)
-      .json({ message: "Invalid bet update details. Amount must be greater than 0." });
+      .json({
+        message: "Invalid bet update details. Amount must be greater than 0.",
+      });
   }
 
   const existingBet = db.getBetById(betId);
@@ -345,8 +347,10 @@ app.put("/api/bets/:betId", authenticateToken, (req, res) => {
     ...existingBet,
     betType,
     amount: parseInt(amount, 10),
-    predictedHomeScore: betType === "EXACT_SCORE" ? parseInt(predictedHomeScore) : null,
-    predictedAwayScore: betType === "EXACT_SCORE" ? parseInt(predictedAwayScore) : null,
+    predictedHomeScore:
+      betType === "EXACT_SCORE" ? parseInt(predictedHomeScore) : null,
+    predictedAwayScore:
+      betType === "EXACT_SCORE" ? parseInt(predictedAwayScore) : null,
     updatedAt: new Date().toISOString(),
   };
 
@@ -423,6 +427,8 @@ app.post("/api/predictions", authenticateToken, (req, res) => {
   res.json({
     message: "Prediction saved successfully!",
     prediction: updatedPrediction,
+  });
+});
 
 app.get("/api/admin/users", requireAdmin, (req, res) => {
   const users = db.getUsers().map((u) => ({
