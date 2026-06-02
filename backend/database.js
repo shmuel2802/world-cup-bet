@@ -519,6 +519,40 @@ const db = {
     data.worldCupPlayers = data.players;
     writeDb(data);
   },
+  getTeamById: (teamId) =>
+    readDb().worldCupTeams.find((team) => team.id === teamId),
+  saveTeam: (team) => {
+    const data = readDb();
+    if (!Array.isArray(data.worldCupTeams)) data.worldCupTeams = [];
+    const index = data.worldCupTeams.findIndex((t) => t.id === team.id);
+    if (index !== -1) {
+      data.worldCupTeams[index] = {
+        ...data.worldCupTeams[index],
+        ...team,
+      };
+    } else {
+      data.worldCupTeams.push({ ...team });
+    }
+    writeDb(data);
+    return team;
+  },
+  saveTeamsBatch: (teamsArray) => {
+    const data = readDb();
+    if (!Array.isArray(data.worldCupTeams)) data.worldCupTeams = [];
+    teamsArray.forEach((incoming) => {
+      const index = data.worldCupTeams.findIndex((t) => t.id === incoming.id);
+      if (index !== -1) {
+        data.worldCupTeams[index] = {
+          ...data.worldCupTeams[index],
+          ...incoming,
+        };
+      } else {
+        data.worldCupTeams.push({ ...incoming });
+      }
+    });
+    writeDb(data);
+    return data.worldCupTeams;
+  },
   saveTeams: (teamsArray) => {
     const data = readDb();
     data.worldCupTeams = Array.isArray(teamsArray) ? teamsArray : [];

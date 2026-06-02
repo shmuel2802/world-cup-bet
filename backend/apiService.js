@@ -34,18 +34,29 @@ class FootballApiService {
       const externalMatches = matchesResponse.data.matches;
       const externalTeams = teamsResponse?.data?.teams || [];
 
-      if (Array.isArray(externalTeams) && externalTeams.length) {
-        const apiTeams = externalTeams.map((team) => {
-          const tla = (team.tla || team.name || "").toLowerCase().slice(0, 2);
-          return {
-            id: `team_${team.id}`,
-            name: team.name || team.shortName || team.crest || "TBD",
-            flag:
-              team.crest || `https://flagcdn.com/w160/${tla}.png`,
-          };
+      const matchTeams = new Map();
+      if (Array.isArray(externalMatches)) {
+        externalMatches.forEach((m) => {
+          [m.homeTeam, m.awayTeam].forEach((team) => {
+            const teamRecord = this.mapTeamRecord(team);
+            if (teamRecord) {
+              matchTeams.set(teamRecord.id, teamRecord);
+            }
+          });
         });
-        this.db.saveTeams(apiTeams);
       }
+
+      if (matchTeams.size) {
+        this.db.saveTeamsBatch([...matchTeams.values()]);
+      }
+
+      if (Array.isArray(externalTeams) && externalTeams.length) {
+        const apiTeams = externalTeams
+          .map((team) => this.mapTeamRecord(team))
+          .filter(Boolean);
+        this.db.saveTeamsBatch(apiTeams);
+      }
+
       if (!externalMatches || !externalMatches.length) return false;
 
       const existingMatches = this.db.getMatches();
@@ -74,12 +85,12 @@ class FootballApiService {
             m.score?.fullTime?.home !== null &&
             m.score?.fullTime?.home !== undefined
               ? m.score.fullTime.home
-              : m.score?.halfTime?.home ?? null,
+              : (m.score?.halfTime?.home ?? null),
           awayScore:
             m.score?.fullTime?.away !== null &&
             m.score?.fullTime?.away !== undefined
               ? m.score.fullTime.away
-              : m.score?.halfTime?.away ?? null,
+              : (m.score?.halfTime?.away ?? null),
           stage: this.translateStage(m.stage),
           homeOdds: 2.0,
           drawOdds: 3.2,
@@ -124,6 +135,14 @@ class FootballApiService {
       });
 
       this.db.replaceMatches(formattedMatches);
+      const uniqueTeamIds = Array.from(matchTeams.values()).map((team) =>
+        team.id.replace(/^team_/, ""),
+      );
+      const squadPlayersSynced = await this.syncTeamSquads(
+        uniqueTeamIds,
+        apiKey,
+      );
+
       if (scorerUpdates.length) {
         this.updatePlayersFromScorers(scorerUpdates);
       }
@@ -134,6 +153,7 @@ class FootballApiService {
         success: true,
         syncedMatches: formattedMatches.length,
         scoredEntries: scorerUpdates.length,
+        syncedPlayers: squadPlayersSynced.length,
       };
     } catch (error) {
       console.error("Error syncing with Football API:", error.message);
@@ -210,6 +230,80 @@ class FootballApiService {
       .sort()
       .join("|");
     return `${match.id || "unknown"}:${home}-${away}:${match.status || ""}:${scorerList}`;
+  }
+
+  mapTeamRecord(team) {
+    if (!team || typeof team.id === "undefined" || team.id === null)
+      return null;
+    const tla = (team.tla || team.shortName || team.name || "")
+      .toString()
+      .trim();
+    return {
+      id: `team_${team.id}`,
+      team_id: `team_${team.id}`,
+      name: team.name || team.shortName || "TBD",
+      tla,
+      crest: team.crest || team.crestUrl || team.logo || team.crestUrl || null,
+    };
+  }
+
+  delay(ms) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
+  async syncTeamSquads(teamIds, apiKey) {
+    if (!Array.isArray(teamIds) || !teamIds.length) return [];
+
+    const syncedPlayers = [];
+    for (let i = 0; i < teamIds.length; i += 1) {
+      const teamId = teamIds[i];
+      try {
+        const teamResponse = await axios.get(
+          `https://api.football-data.org/v4/teams/${teamId}`,
+          {
+            headers: { "X-Auth-Token": apiKey },
+          },
+        );
+
+        const teamData = teamResponse.data;
+        const teamRecord = this.mapTeamRecord(teamData);
+        if (teamRecord) {
+          this.db.saveTeam(teamRecord);
+        }
+
+        const squad = Array.isArray(teamData.squad) ? teamData.squad : [];
+        const players = squad
+          .map((player) => {
+            const playerName = player.name || player.fullName || "Unknown";
+            const playerId = player.id
+              ? `player_${player.id}`
+              : this.normalizePlayerId(`${playerName}_${teamId}`);
+            return {
+              id: playerId,
+              name: playerName,
+              position: player.position || "Unknown",
+              dateOfBirth: player.dateOfBirth || null,
+              team: teamRecord?.name || teamData.name || "Unknown",
+              team_id: teamRecord?.id || `team_${teamId}`,
+              goals_scored: 0,
+            };
+          })
+          .filter((entry) => entry.id && entry.name);
+
+        if (players.length) {
+          this.db.savePlayersBatch(players);
+          syncedPlayers.push(...players);
+        }
+      } catch (error) {
+        console.error(`Error syncing squad for team ${teamId}:`, error.message);
+      }
+
+      if (i < teamIds.length - 1) {
+        await this.delay(6000);
+      }
+    }
+
+    return syncedPlayers;
   }
 
   buildFallbackScorers(formattedMatch, previousMatch) {
