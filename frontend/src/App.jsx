@@ -1,4 +1,21 @@
 import React, { useState, useEffect } from "react";
+import * as Icons from "lucide-react";
+
+const {
+  AlertCircle,
+  Check,
+  Trophy,
+  User,
+  Coins,
+  LogOut,
+  Calendar,
+  History,
+  Star,
+  Settings,
+  RefreshCw,
+  Eye,
+  EyeOff,
+} = Icons;
 <ul
   style={{
     listStyleType: "none",
@@ -67,6 +84,7 @@ function App() {
   const [settingsMax, setSettingsMax] = useState(500);
   const [settingsQuickAmounts, setSettingsQuickAmounts] =
     useState("50,100,200,500");
+  const PREDICTION_LOCK_DATE = new Date("2026-06-11T00:00:00Z");
   const [loading, setLoading] = useState(false);
   const [syncLoading, setSyncLoading] = useState(false);
   const [message, setMessage] = useState({ text: "", type: "" });
