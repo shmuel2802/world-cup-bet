@@ -81,7 +81,7 @@ app.post("/api/auth/register", async (req, res) => {
       username: username.trim(),
       passwordHash,
       isAdmin: false,
-      balance: db.getSettings().startingBalance || 1000,
+      balance: 0,
       winRate: 0,
       totalBets: 0,
     };
@@ -216,6 +216,15 @@ app.get("/api/matches", authenticateToken, (req, res) => {
       exact: total > 0 ? Math.round((exactCount / total) * 100) : 0,
     };
 
+    const communityPredictions = matchBets.map((b) => ({
+      username: b.username,
+      betType: b.betType,
+      predictedHomeScore: b.predictedHomeScore,
+      predictedAwayScore: b.predictedAwayScore,
+      status: b.status,
+      isCurrentUser: b.userId === req.user.id,
+    }));
+
     return {
       ...match,
       myBet: userBet
@@ -230,10 +239,36 @@ app.get("/api/matches", authenticateToken, (req, res) => {
           }
         : null,
       predictionDistribution,
+      communityPredictions,
     };
   });
 
   res.json(matchesWithBets);
+});
+
+// Get public predictions for a specific match (username + prediction + status only)
+app.get("/api/matches/:matchId/predictions", authenticateToken, (req, res) => {
+  const { matchId } = req.params;
+  const match = db.getMatchById(matchId);
+  if (!match) {
+    return res.status(404).json({ message: "המשחק לא נמצא." });
+  }
+
+  const matchBets = db.getBetsByMatchId(matchId);
+  const predictions = matchBets.map((b) => ({
+    username: b.username,
+    betType: b.betType,
+    predictedHomeScore: b.predictedHomeScore,
+    predictedAwayScore: b.predictedAwayScore,
+    status: b.status,
+    isCurrentUser: b.userId === req.user.id,
+  }));
+
+  res.json({
+    matchId,
+    total: predictions.length,
+    predictions,
+  });
 });
 
 // --- BETS ROUTES ---
@@ -537,26 +572,74 @@ app.post("/api/admin/match", requireAdmin, (req, res) => {
   });
 });
 
-// Update user balance (give money/coins)
-app.post("/api/admin/user-balance", requireAdmin, (req, res) => {
-  const { userId, amount } = req.body;
+// Get all users (admin only)
+app.get("/api/admin/users", requireAdmin, (req, res) => {
+  const users = db.getUsers().map(({ passwordHash, ...user }) => user);
+  res.json(users);
+});
 
-  if (!userId || amount === undefined) {
-    return res
-      .status(400)
-      .json({ message: "User ID and amount are required." });
+// Delete a user (admin only)
+app.delete("/api/admin/users/:userId", requireAdmin, (req, res) => {
+  const { userId } = req.params;
+  if (req.user.id === userId) {
+    return res.status(400).json({ message: "Cannot delete yourself." });
+  }
+  const success = db.deleteUser(userId);
+  if (success) {
+    res.json({ message: "User deleted successfully." });
+  } else {
+    res
+      .status(404)
+      .json({ message: "User not found or could not be deleted." });
+  }
+});
+
+// Update user balance (admin only)
+app.put("/api/admin/users/:userId/balance", requireAdmin, (req, res) => {
+  const { userId } = req.params;
+  const { balance } = req.body;
+
+  if (balance === undefined || isNaN(parseInt(balance))) {
+    return res.status(400).json({ message: "Invalid balance amount." });
   }
 
-  const user = db.getUserById(userId);
-  if (!user) return res.status(404).json({ message: "User not found." });
+  const updatedUser = db.updateUserBalance(userId, parseInt(balance));
+  if (updatedUser) {
+    const { passwordHash, ...safeUser } = updatedUser;
+    res.json({
+      message: "User points balance updated successfully.",
+      user: safeUser,
+    });
+  } else {
+    res.status(404).json({ message: "User not found." });
+  }
+});
 
-  user.balance = parseInt(amount);
-  db.saveUser(user);
+// Update user admin status (admin only)
+app.put("/api/admin/users/:userId/admin-status", requireAdmin, (req, res) => {
+  const { userId } = req.params;
+  const { isAdmin } = req.body;
 
-  res.json({
-    message: `Updated balance for ${user.username} to ${user.balance}`,
-    user: { id: user.id, username: user.username, balance: user.balance },
-  });
+  if (isAdmin === undefined || typeof isAdmin !== "boolean") {
+    return res.status(400).json({ message: "Invalid admin status." });
+  }
+
+  if (req.user.id === userId && isAdmin === false) {
+    return res
+      .status(400)
+      .json({ message: "Cannot revoke your own admin status." });
+  }
+
+  const updatedUser = db.updateUserAdminStatus(userId, isAdmin);
+  if (updatedUser) {
+    const { passwordHash, ...safeUser } = updatedUser;
+    res.json({
+      message: "User admin status updated successfully.",
+      user: safeUser,
+    });
+  } else {
+    res.status(404).json({ message: "User not found." });
+  }
 });
 
 // Add mock/custom match

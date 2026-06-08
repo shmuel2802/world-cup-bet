@@ -631,32 +631,30 @@ header {
   color: var(--text-secondary);
 }
 
-/* Bet Slip Drawer (Slide Up) */
+/* Bet Slip Modal (Centered Popup) */
 .betslip-backdrop {
   position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.6);
-  backdrop-filter: blur(4px);
-  z-index: 100;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.65);
+  backdrop-filter: blur(6px);
+  z-index: 1000;
   display: flex;
-  align-items: flex-end;
+  align-items: center;
   justify-content: center;
+  padding: 1.25rem;
 }
 
 .betslip-drawer {
   width: 100%;
-  max-width: 500px;
+  max-width: 480px;
   background: var(--bg-surface-opaque);
-  border-top: 2px solid var(--primary);
-  border-radius: 24px 24px 0 0;
-  padding: 2rem;
-  box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.5);
-  animation: slideUp 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  max-height: 90vh;
-  overflow-y: hidden;
+  border: 1px solid var(--border-active);
+  border-radius: 20px;
+  padding: 1.75rem;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.55), 0 0 40px var(--primary-glow);
+  animation: modalPopIn 0.28s cubic-bezier(0.34, 1.4, 0.64, 1);
+  max-height: calc(100vh - 2.5rem);
+  overflow-y: auto;
 }
 
 .betslip-header {
@@ -756,6 +754,17 @@ header {
 @keyframes slideUp {
   from { transform: translateY(100%); }
   to { transform: translateY(0); }
+}
+
+@keyframes modalPopIn {
+  from {
+    opacity: 0;
+    transform: scale(0.92) translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
 }
 
 @keyframes float {
@@ -978,12 +987,16 @@ header {
     font-size: 0.95rem;
   }
 
-  /* Bet Slip Mobile Drawer */
+  /* Bet Slip Mobile Modal */
+  .betslip-backdrop {
+    padding: 1rem;
+    padding-bottom: calc(1rem + env(safe-area-inset-bottom, 0px));
+  }
+
   .betslip-drawer {
     padding: 1.5rem 1.25rem;
-    border-radius: 20px 20px 0 0;
-    margin-bottom: calc(74px + env(safe-area-inset-bottom, 0px));
-    max-height: calc(100vh - 90px);
+    border-radius: 18px;
+    max-height: calc(100vh - 2rem - env(safe-area-inset-bottom, 0px));
   }
 
   .score-input-box {
@@ -1296,5 +1309,141 @@ header {
   border: 1px solid var(--border-light);
   border-radius: 12px;
   min-height: 50px;
+}
+
+/* Admin user management */
+.admin-user-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.85rem 1rem;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--border-light);
+  border-radius: 12px;
+  gap: 1rem;
+}
+
+.admin-user-info {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  flex: 1;
+}
+
+.admin-user-badge {
+  font-size: 0.65rem;
+  background: rgba(245, 158, 11, 0.15);
+  color: var(--accent);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 700;
+}
+
+.admin-user-points {
+  font-size: 0.85rem;
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.admin-balance-edit {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.admin-user-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-shrink: 0;
+}
+
+/* Community predictions on match cards */
+.match-community-count {
+  font-size: 0.8rem;
+  color: var(--primary);
+  text-align: center;
+  margin-bottom: 0.5rem;
+  padding: 0.4rem 0.75rem;
+  background: rgba(16, 185, 129, 0.08);
+  border-radius: 8px;
+  border: 1px solid rgba(16, 185, 129, 0.2);
+  transition: var(--transition-smooth);
+}
+
+.match-community-count:hover {
+  background: rgba(16, 185, 129, 0.14);
+}
+
+/* Community predictions list in bet slip */
+.community-predictions-list {
+  margin-top: 1.25rem;
+  padding: 1rem 1.25rem;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--border-light);
+  border-radius: 16px;
+}
+
+.community-predictions-list h4 {
+  font-size: 0.9rem;
+  font-weight: 700;
+  margin-bottom: 0.75rem;
+  color: var(--text-primary);
+}
+
+.community-predictions-scroll {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  max-height: 160px;
+  overflow-y: auto;
+}
+
+.community-prediction-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 10px;
+  font-size: 0.8rem;
+}
+
+.community-prediction-item.is-me {
+  border: 1px solid var(--border-active);
+  background: rgba(16, 185, 129, 0.06);
+}
+
+.community-pred-username {
+  font-weight: 700;
+  min-width: 70px;
+  color: var(--text-primary);
+}
+
+.community-pred-choice {
+  flex: 1;
+  color: var(--text-secondary);
+  text-align: center;
+}
+
+.community-pred-status {
+  font-size: 0.75rem;
+  font-weight: 600;
+  min-width: 55px;
+  text-align: left;
+}
+
+.community-pred-status.pending {
+  color: var(--accent);
+}
+
+.community-pred-status.won {
+  color: var(--primary);
+}
+
+.community-pred-status.lost {
+  color: var(--danger);
 }
 

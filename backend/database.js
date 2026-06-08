@@ -49,10 +49,11 @@ function ensureSystemData(data) {
   }
 
   data.settings = {
-    registrationEnabled: true,
-    startingBalance: 0,
-    footballApiKey: process.env.FOOTBALL_API_KEY || "",
     ...data.settings,
+    registrationEnabled: data.settings.registrationEnabled ?? true,
+    startingBalance: 0,
+    footballApiKey:
+      data.settings.footballApiKey || process.env.FOOTBALL_API_KEY || "",
   };
 
   const hasAdmin = data.users.some(
@@ -213,6 +214,18 @@ function writeDb(data) {
 const db = {
   getUsers: () => readDb().users,
   getUserById: (id) => readDb().users.find((u) => u.id === id),
+  deleteUser: (userId) => {
+    const data = readDb();
+    const userIndex = data.users.findIndex((u) => u.id === userId);
+    if (userIndex === -1) return false;
+    data.users.splice(userIndex, 1);
+    data.bets = data.bets.filter((b) => b.userId !== userId);
+    data.longTermPredictions = data.longTermPredictions.filter(
+      (p) => p.userId !== userId,
+    );
+    writeDb(data);
+    return true;
+  },
   getUserByUsername: (username) =>
     readDb().users.find(
       (u) => u.username.toLowerCase() === username.toLowerCase(),
@@ -227,6 +240,30 @@ const db = {
     }
     writeDb(data);
     return user;
+  },
+
+  // New function to update user balance directly
+  updateUserBalance: (userId, newBalance) => {
+    const data = readDb();
+    const user = data.users.find((u) => u.id === userId);
+    if (user) {
+      user.balance = newBalance;
+      writeDb(data);
+      return user;
+    }
+    return null;
+  },
+
+  // New function to update user admin status
+  updateUserAdminStatus: (userId, isAdmin) => {
+    const data = readDb();
+    const user = data.users.find((u) => u.id === userId);
+    if (user) {
+      user.isAdmin = isAdmin;
+      writeDb(data);
+      return user;
+    }
+    return null;
   },
 
   getMatches: () => readDb().matches,
@@ -262,6 +299,8 @@ const db = {
   },
 
   getBets: () => readDb().bets,
+  // New function to get all users, potentially excluding admin for some views
+  getAllUsers: () => readDb().users.filter((u) => !u.isAdmin),
   getBetsByUserId: (userId) => readDb().bets.filter((b) => b.userId === userId),
   getBetsByMatchId: (matchId) =>
     readDb().bets.filter((b) => b.matchId === matchId),

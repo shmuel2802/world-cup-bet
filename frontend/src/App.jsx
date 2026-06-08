@@ -3,7 +3,6 @@ import {
   Trophy, 
   User, 
   Lock, 
-  Coins, 
   Calendar, 
   TrendingUp, 
   History, 
@@ -16,10 +15,13 @@ import {
   RefreshCw,
   Plus,
   Eye,
-  EyeOff
+  EyeOff,
+  Trash2,
+  Pencil
 } from 'lucide-react';
 
-const API_URL = 'https://world-cup-bet.onrender.com/api';
+const API_URL = import.meta.env.VITE_API_URL
+  || (import.meta.env.DEV ? 'http://localhost:5000/api' : 'https://world-cup-bet.onrender.com/api');
 
 function App() {
   // Auth State
@@ -45,8 +47,8 @@ function App() {
   const [betSlipMatch, setBetSlipMatch] = useState(null);
   const [betType, setBetType] = useState('HOME'); // HOME, DRAW, AWAY, EXACT_SCORE
   const [betAmount, setBetAmount] = useState(100);
-  const [predHome, setPredHome] = useState(0);
-  const [predAway, setPredAway] = useState(0);
+  const [predHome, setPredHome] = useState('0');
+  const [predAway, setPredAway] = useState('0');
 
   // Admin states
   const [adminSelectedMatch, setAdminSelectedMatch] = useState(null);
@@ -58,6 +60,11 @@ function App() {
   const [customHomeTeam, setCustomHomeTeam] = useState('');
   const [customAwayTeam, setCustomAwayTeam] = useState('');
   const [customStage, setCustomStage] = useState('שלב הבתים');
+
+  // Admin user management
+  const [adminUsers, setAdminUsers] = useState([]);
+  const [editingUserBalance, setEditingUserBalance] = useState(null);
+  const [balanceEditValue, setBalanceEditValue] = useState('');
 
   // Long-Term Tournament predictions state
   const [allTeams, setAllTeams] = useState([]);
@@ -93,6 +100,13 @@ function App() {
     return () => clearInterval(interval);
   }, [token]);
 
+  // Load admin users when admin tab is opened
+  useEffect(() => {
+    if (token && user?.isAdmin && activeTab === 'admin') {
+      fetchAdminUsers();
+    }
+  }, [token, user, activeTab]);
+
   const showToast = (text, type = 'success') => {
     setMessage({ text, type });
     setTimeout(() => setMessage({ text: '', type: '' }), 5000);
@@ -124,6 +138,18 @@ function App() {
       fetchTournamentData()
     ]);
     setLoading(false);
+  };
+
+  const fetchAdminUsers = async () => {
+    try {
+      const res = await fetch(`${API_URL}/admin/users`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (res.ok) setAdminUsers(data);
+    } catch (err) {
+      console.error(err);
+    }
   };
 
   const fetchMatchesOnly = async () => {
@@ -268,6 +294,19 @@ function App() {
     showToast('התנתקת בהצלחה. נתראה במגרש!', 'info');
   };
 
+  const handleScoreInput = (setter) => (e) => {
+    const digits = e.target.value.replace(/\D/g, '');
+    if (digits === '') {
+      setter('');
+      return;
+    }
+    setter(String(Math.min(9, parseInt(digits.slice(-1), 10))));
+  };
+
+  const handleScoreBlur = (value, setter) => {
+    if (value === '') setter('0');
+  };
+
   // --- Betting Handlers ---
   const openBetSlip = (match) => {
     if (match.status !== 'SCHEDULED' || new Date() >= new Date(match.utcDate)) {
@@ -277,12 +316,12 @@ function App() {
     setBetSlipMatch(match);
     if (match.myBet) {
       setBetType(match.myBet.betType);
-      setPredHome(match.myBet.predictedHomeScore || 0);
-      setPredAway(match.myBet.predictedAwayScore || 0);
+      setPredHome(String(match.myBet.predictedHomeScore ?? 0));
+      setPredAway(String(match.myBet.predictedAwayScore ?? 0));
     } else {
       setBetType('HOME');
-      setPredHome(0);
-      setPredAway(0);
+      setPredHome('0');
+      setPredAway('0');
     }
   };
 
@@ -297,8 +336,8 @@ function App() {
         body: JSON.stringify({
           matchId: betSlipMatch.id,
           betType,
-          predictedHomeScore: betType === 'EXACT_SCORE' ? predHome : null,
-          predictedAwayScore: betType === 'EXACT_SCORE' ? predAway : null
+          predictedHomeScore: betType === 'EXACT_SCORE' ? (parseInt(predHome, 10) || 0) : null,
+          predictedAwayScore: betType === 'EXACT_SCORE' ? (parseInt(predAway, 10) || 0) : null
         })
       });
       const data = await res.json();
@@ -396,6 +435,58 @@ function App() {
     }
   };
 
+  const handleDeleteUser = async (userId, username) => {
+    if (!window.confirm(`האם למחוק את המשתמש "${username}"? פעולה זו בלתי הפיכה.`)) return;
+
+    try {
+      const res = await fetch(`${API_URL}/admin/users/${userId}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (res.ok) {
+        showToast(`המשתמש ${username} נמחק בהצלחה`);
+        fetchAdminUsers();
+        fetchLeaderboardOnly();
+      } else {
+        showToast(data.message || 'שגיאה במחיקת המשתמש', 'error');
+      }
+    } catch (err) {
+      showToast('שגיאת תקשורת במחיקת המשתמש', 'error');
+    }
+  };
+
+  const handleUpdateUserBalance = async (userId) => {
+    const newBalance = parseInt(balanceEditValue, 10);
+    if (isNaN(newBalance) || newBalance < 0) {
+      showToast('יש להזין מספר נקודות תקין (0 ומעלה)', 'error');
+      return;
+    }
+
+    try {
+      const res = await fetch(`${API_URL}/admin/users/${userId}/balance`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ balance: newBalance })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        showToast('ניקוד המשתמש עודכן בהצלחה');
+        setEditingUserBalance(null);
+        setBalanceEditValue('');
+        fetchAdminUsers();
+        fetchLeaderboardOnly();
+      } else {
+        showToast(data.message || 'שגיאה בעדכון הניקוד', 'error');
+      }
+    } catch (err) {
+      showToast('שגיאת תקשורת בעדכון הניקוד', 'error');
+    }
+  };
+
   const handleCreateCustomMatch = async (e) => {
     e.preventDefault();
     if (!customHomeTeam || !customAwayTeam) {
@@ -463,7 +554,7 @@ function App() {
             </div>
 
             <h2>{authMode === 'login' ? 'התחברות לחברים' : 'רישום שחקן חדש'}</h2>
-            <p>המר על משחקים וזכה בכסף וירטואלי מול החברים במונדיאל!</p>
+            <p>נחש תוצאות משחקים וצבור נקודות מול החברים במונדיאל!</p>
 
             {authError && (
               <div style={{
@@ -519,7 +610,7 @@ function App() {
               </div>
 
               <button type="submit" className="btn btn-primary" style={{ width: '100%', marginTop: '1rem' }}>
-                {authMode === 'login' ? 'הכנס למגרש ⚽' : 'הרשם וקבל 1,000 מטבעות 🚀'}
+                {authMode === 'login' ? 'הכנס למגרש ⚽' : 'הרשם והתחל לנחש 🚀'}
               </button>
             </form>
 
@@ -758,6 +849,15 @@ function App() {
                         // If no bet and scheduled, allow betting
                         match.status === 'SCHEDULED' && (
                           <div>
+                            {match.communityPredictions && match.communityPredictions.length > 0 && (
+                              <div
+                                className="match-community-count"
+                                onClick={() => openBetSlip(match)}
+                                style={{ cursor: 'pointer' }}
+                              >
+                                👥 {match.communityPredictions.length} חברים כבר ניחשו — לחץ לצפייה
+                              </div>
+                            )}
                             <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '0.5rem', textAlign: 'center' }}>
                               לחץ על יחס הימור כדי לבצע הימור מהיר:
                             </div>
@@ -916,7 +1016,7 @@ function App() {
               <div className="glass-panel admin-card">
                 <h3>עדכון תוצאות ידני וחישוב הימורים</h3>
                 <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', marginBottom: '1.25rem' }}>
-                  כאן תוכל להזין תוצאה סופית של משחק כדי לבדוק את חלוקת הכסף הווירטואלי לשחקנים מיד!
+                  כאן תוכל להזין תוצאה סופית של משחק כדי לבדוק את חלוקת הנקודות לשחקנים מיד!
                 </p>
 
                 {adminSelectedMatch ? (
@@ -971,6 +1071,84 @@ function App() {
                         }}>
                           עדכן משחק
                         </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* User Management */}
+              <div className="glass-panel admin-card">
+                <h3>ניהול משתמשים</h3>
+                <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', margin: '0.5rem 0 1.25rem 0' }}>
+                  מחיקת משתמשים ועדכון יתרת הנקודות שלהם ישירות מהמערכת.
+                </p>
+
+                {adminUsers.length === 0 ? (
+                  <p style={{ color: 'var(--text-secondary)', textAlign: 'center', padding: '1rem' }}>אין משתמשים במערכת</p>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                    {adminUsers.map((adminUser) => (
+                      <div key={adminUser.id} className="admin-user-row">
+                        <div className="admin-user-info">
+                          <strong>{adminUser.username}</strong>
+                          {adminUser.isAdmin && (
+                            <span className="admin-user-badge">מנהל</span>
+                          )}
+                          {editingUserBalance === adminUser.id ? (
+                            <div className="admin-balance-edit">
+                              <input
+                                type="number"
+                                className="form-input"
+                                min="0"
+                                value={balanceEditValue}
+                                onChange={(e) => setBalanceEditValue(e.target.value)}
+                                style={{ width: '100px', padding: '0.4rem 0.6rem' }}
+                              />
+                              <button
+                                className="btn btn-primary"
+                                style={{ padding: '0.35rem 0.75rem', fontSize: '0.8rem' }}
+                                onClick={() => handleUpdateUserBalance(adminUser.id)}
+                              >
+                                שמור
+                              </button>
+                              <button
+                                className="btn btn-secondary"
+                                style={{ padding: '0.35rem 0.75rem', fontSize: '0.8rem' }}
+                                onClick={() => { setEditingUserBalance(null); setBalanceEditValue(''); }}
+                              >
+                                ביטול
+                              </button>
+                            </div>
+                          ) : (
+                            <span className="admin-user-points">{adminUser.balance.toLocaleString()} נקודות</span>
+                          )}
+                        </div>
+                        <div className="admin-user-actions">
+                          {editingUserBalance !== adminUser.id && (
+                            <button
+                              className="btn btn-secondary"
+                              style={{ padding: '0.4rem 0.6rem', fontSize: '0.85rem' }}
+                              onClick={() => {
+                                setEditingUserBalance(adminUser.id);
+                                setBalanceEditValue(String(adminUser.balance));
+                              }}
+                              title="ערוך ניקוד"
+                            >
+                              <Pencil size={14} />
+                            </button>
+                          )}
+                          {adminUser.id !== user.id && (
+                            <button
+                              className="btn btn-danger"
+                              style={{ padding: '0.4rem 0.6rem', fontSize: '0.85rem' }}
+                              onClick={() => handleDeleteUser(adminUser.id, adminUser.username)}
+                              title="מחק משתמש"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          )}
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -1287,20 +1465,63 @@ function App() {
               <div className="score-inputs">
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
                   <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '0.25rem' }}>{betSlipMatch.homeTeam}</span>
-                  <input type="number" className="form-input score-input-box" min="0" max="9" value={predHome} onChange={e => setPredHome(parseInt(e.target.value) || 0)} />
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    className="form-input score-input-box"
+                    value={predHome}
+                    onFocus={(e) => e.target.select()}
+                    onChange={handleScoreInput(setPredHome)}
+                    onBlur={() => handleScoreBlur(predHome, setPredHome)}
+                  />
                 </div>
                 <span style={{ fontSize: '2rem', color: 'var(--text-muted)', paddingTop: '1rem' }}>-</span>
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
                   <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '0.25rem' }}>{betSlipMatch.awayTeam}</span>
-                  <input type="number" className="form-input score-input-box" min="0" max="9" value={predAway} onChange={e => setPredAway(parseInt(e.target.value) || 0)} />
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    className="form-input score-input-box"
+                    value={predAway}
+                    onFocus={(e) => e.target.select()}
+                    onChange={handleScoreInput(setPredAway)}
+                    onBlur={() => handleScoreBlur(predAway, setPredAway)}
+                  />
                 </div>
               </div>
             </div>
 
-            {/* Community Distribution - Shown if user has saved prediction */}
-            {betSlipMatch.myBet && betSlipMatch.predictionDistribution && (
+            {/* Community predictions list */}
+            {betSlipMatch.communityPredictions && betSlipMatch.communityPredictions.length > 0 && (
+              <div className="community-predictions-list">
+                <h4>ניחושי החברים ({betSlipMatch.communityPredictions.length})</h4>
+                <div className="community-predictions-scroll">
+                  {betSlipMatch.communityPredictions.map((pred, idx) => (
+                    <div
+                      key={`${pred.username}-${idx}`}
+                      className={`community-prediction-item ${pred.isCurrentUser ? 'is-me' : ''}`}
+                    >
+                      <span className="community-pred-username">
+                        {pred.isCurrentUser ? 'את/ה' : pred.username}
+                      </span>
+                      <span className="community-pred-choice">
+                        {getBetTypeLabel(pred.betType, pred.predictedHomeScore, pred.predictedAwayScore)}
+                      </span>
+                      <span className={`community-pred-status ${pred.status.toLowerCase()}`}>
+                        {pred.status === 'PENDING' && 'ממתין'}
+                        {pred.status === 'WON' && 'פגע ✓'}
+                        {pred.status === 'LOST' && 'לא פגע'}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Community Distribution */}
+            {betSlipMatch.predictionDistribution && betSlipMatch.predictionDistribution.total > 0 && (
               <div className="community-distribution">
-                <h4>מה שאר האנשים הימרו:</h4>
+                <h4>התפלגות הניחושים:</h4>
                 <div className="distribution-bar-wrapper">
                   <div className="distribution-bar-label">
                     <span>ניצחון {betSlipMatch.homeTeam}</span>

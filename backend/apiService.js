@@ -247,7 +247,7 @@ class FootballApiService {
       bet.payout = won ? (bet.betType === 'EXACT_SCORE' ? 5 : 2) : 0;
       updatedBets = true;
 
-      // Update user wallet balance
+      // Update user points balance
       if (won) {
         user.balance += bet.payout;
       }
