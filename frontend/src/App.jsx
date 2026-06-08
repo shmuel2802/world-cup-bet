@@ -59,6 +59,18 @@ function App() {
   const [customAwayTeam, setCustomAwayTeam] = useState('');
   const [customStage, setCustomStage] = useState('שלב הבתים');
 
+  // Long-Term Tournament predictions state
+  const [allTeams, setAllTeams] = useState([]);
+  const [allPlayers, setAllPlayers] = useState([]);
+  const [longTermPrediction, setLongTermPrediction] = useState({ winnerTeamId: null, topScorerPlayerId: null });
+  const [selectedTeam, setSelectedTeam] = useState(null);
+  const [selectedPlayer, setSelectedPlayer] = useState(null);
+  const [searchTeamQuery, setSearchTeamQuery] = useState('');
+  const [searchPlayerQuery, setSearchPlayerQuery] = useState('');
+  const [teamDropdownOpen, setTeamDropdownOpen] = useState(false);
+  const [playerDropdownOpen, setPlayerDropdownOpen] = useState(false);
+  const [longTermSaving, setLongTermSaving] = useState(false);
+
   // 1. Fetch user profile and app data if authenticated
   useEffect(() => {
     if (token) {
@@ -108,7 +120,8 @@ function App() {
     await Promise.all([
       fetchMatchesOnly(),
       fetchBetsOnly(),
-      fetchLeaderboardOnly()
+      fetchLeaderboardOnly(),
+      fetchTournamentData()
     ]);
     setLoading(false);
   };
@@ -146,6 +159,77 @@ function App() {
       if (res.ok) setLeaderboard(data);
     } catch (err) {
       console.error(err);
+    }
+  };
+
+  const isTournamentLocked = () => {
+    const KICKOFF_DATE = new Date('2026-06-11T19:00:00Z');
+    return new Date() > KICKOFF_DATE;
+  };
+
+  const fetchTournamentData = async () => {
+    try {
+      const headers = { 'Authorization': `Bearer ${token}` };
+      const [resTeams, resPlayers, resLtp] = await Promise.all([
+        fetch(`${API_URL}/teams`, { headers }),
+        fetch(`${API_URL}/players`, { headers }),
+        fetch(`${API_URL}/predictions/long-term`, { headers })
+      ]);
+      
+      const teamsData = await resTeams.json();
+      const playersData = await resPlayers.json();
+      const ltpData = await resLtp.json();
+      
+      if (resTeams.ok) setAllTeams(teamsData);
+      if (resPlayers.ok) setAllPlayers(playersData);
+      
+      if (resLtp.ok) {
+        setLongTermPrediction(ltpData);
+        if (ltpData.winnerTeamId) {
+          const team = teamsData.find(t => String(t.id) === String(ltpData.winnerTeamId));
+          setSelectedTeam(team || null);
+        }
+        if (ltpData.topScorerPlayerId) {
+          const player = playersData.find(p => String(p.id) === String(ltpData.topScorerPlayerId));
+          setSelectedPlayer(player || null);
+        }
+      }
+    } catch (err) {
+      console.error("Error fetching tournament data:", err);
+    }
+  };
+
+  const saveLongTermPredictionAction = async () => {
+    if (!selectedTeam || !selectedPlayer) {
+      showToast('אנא בחר מנצחת טורניר ומלך שערים', 'error');
+      return;
+    }
+
+    setLongTermSaving(true);
+    try {
+      const res = await fetch(`${API_URL}/predictions/long-term`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          winnerTeamId: selectedTeam.id,
+          topScorerPlayerId: selectedPlayer.id
+        })
+      });
+      const data = await res.json();
+
+      if (res.ok) {
+        showToast('הניחושים ארוכי הטווח שלך נשמרו בהצלחה! 🏆⚽');
+        setLongTermPrediction(data.prediction);
+      } else {
+        showToast(data.message || 'שגיאה בשמירת הניחושים', 'error');
+      }
+    } catch (err) {
+      showToast('שגיאת תקשורת בשמירת הניחושים', 'error');
+    } finally {
+      setLongTermSaving(false);
     }
   };
 
@@ -520,6 +604,10 @@ function App() {
           <Calendar size={18} />
           לוח משחקים
         </button>
+        <button className={`tab-btn ${activeTab === 'tournament' ? 'active' : ''}`} onClick={() => setActiveTab('tournament')}>
+          <Trophy size={18} style={{ color: 'var(--accent)' }} />
+          ניחושי מונדיאל
+        </button>
         <button className={`tab-btn ${activeTab === 'leaderboard' ? 'active' : ''}`} onClick={() => setActiveTab('leaderboard')}>
           <Trophy size={18} />
           טבלת מובילים
@@ -601,24 +689,71 @@ function App() {
 
                       {/* User's existing bet on this match */}
                       {match.myBet ? (
-                        <div className="my-bet-indicator" style={{ cursor: match.status === 'SCHEDULED' ? 'pointer' : 'default' }} onClick={() => match.status === 'SCHEDULED' && openBetSlip(match)}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flex: 1 }}>
-                            <Check size={16} style={{ color: 'var(--primary)' }} />
-                            <span>
-                              הניחוש שלך: <strong>{getBetTypeLabel(match.myBet.betType, match.myBet.predictedHomeScore, match.myBet.predictedAwayScore)}</strong>
-                              {match.status === 'SCHEDULED' && (
-                                <span style={{ fontSize: '0.75rem', color: 'var(--primary)', textDecoration: 'underline', marginRight: '8px' }}>
-                                  (עריכה / ביטול)
-                                </span>
-                              )}
+                        <>
+                          <div className="my-bet-indicator has-distribution" style={{ cursor: match.status === 'SCHEDULED' ? 'pointer' : 'default' }} onClick={() => match.status === 'SCHEDULED' && openBetSlip(match)}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flex: 1 }}>
+                              <Check size={16} style={{ color: 'var(--primary)' }} />
+                              <span>
+                                הניחוש שלך: <strong>{getBetTypeLabel(match.myBet.betType, match.myBet.predictedHomeScore, match.myBet.predictedAwayScore)}</strong>
+                                {match.status === 'SCHEDULED' && (
+                                  <span style={{ fontSize: '0.75rem', color: 'var(--primary)', textDecoration: 'underline', marginRight: '8px' }}>
+                                    (עריכה / ביטול)
+                                  </span>
+                                )}
+                              </span>
+                            </div>
+                            <span className={`my-bet-payout ${match.myBet.status.toLowerCase()}`}>
+                              {match.myBet.status === 'PENDING' && 'ממתין לתוצאה...⏳'}
+                              {match.myBet.status === 'WON' && `פגעת! +${match.myBet.payout} נקודות 🏆`}
+                              {match.myBet.status === 'LOST' && 'לא פגע... ❌'}
                             </span>
                           </div>
-                          <span className={`my-bet-payout ${match.myBet.status.toLowerCase()}`}>
-                            {match.myBet.status === 'PENDING' && 'ממתין לתוצאה...⏳'}
-                            {match.myBet.status === 'WON' && `פגעת! +${match.myBet.payout} נקודות 🏆`}
-                            {match.myBet.status === 'LOST' && 'לא פגע... ❌'}
-                          </span>
-                        </div>
+                          
+                          {/* Mini community distribution under the indicator */}
+                          {match.predictionDistribution && (
+                            <div className="match-community-distribution" style={{ cursor: match.status === 'SCHEDULED' ? 'pointer' : 'default' }} onClick={() => match.status === 'SCHEDULED' && openBetSlip(match)}>
+                              <div className="dist-title">התפלגות ניחושי החברים:</div>
+                              <div className="dist-bars">
+                                <div className="dist-bar-item">
+                                  <div className="dist-label">
+                                    <span>ניצחון {match.homeTeam}</span>
+                                    <span>{match.predictionDistribution.home}%</span>
+                                  </div>
+                                  <div className="dist-bg">
+                                    <div className="dist-fill home" style={{ width: `${match.predictionDistribution.home}%` }}></div>
+                                  </div>
+                                </div>
+                                <div className="dist-bar-item">
+                                  <div className="dist-label">
+                                    <span>תיקו</span>
+                                    <span>{match.predictionDistribution.draw}%</span>
+                                  </div>
+                                  <div className="dist-bg">
+                                    <div className="dist-fill draw" style={{ width: `${match.predictionDistribution.draw}%` }}></div>
+                                  </div>
+                                </div>
+                                <div className="dist-bar-item">
+                                  <div className="dist-label">
+                                    <span>ניצחון {match.awayTeam}</span>
+                                    <span>{match.predictionDistribution.away}%</span>
+                                  </div>
+                                  <div className="dist-bg">
+                                    <div className="dist-fill away" style={{ width: `${match.predictionDistribution.away}%` }}></div>
+                                  </div>
+                                </div>
+                                <div className="dist-bar-item">
+                                  <div className="dist-label">
+                                    <span>מדויק</span>
+                                    <span>{match.predictionDistribution.exact}%</span>
+                                  </div>
+                                  <div className="dist-bg">
+                                    <div className="dist-fill exact" style={{ width: `${match.predictionDistribution.exact}%` }}></div>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                        </>
                       ) : (
                         // If no bet and scheduled, allow betting
                         match.status === 'SCHEDULED' && (
@@ -868,6 +1003,200 @@ function App() {
               </div>
             </div>
           )}
+
+          {/* TAB 5: TOURNAMENT LONG-TERM PREDICTIONS */}
+          {activeTab === 'tournament' && (
+            <div>
+              <div className="section-title">
+                <Trophy size={24} style={{ color: 'var(--accent)' }} />
+                <h2>ניחושים ארוכי טווח - מונדיאל 2026</h2>
+              </div>
+
+              <div className="glass-panel long-term-card">
+                <h3>ניחוש מנצחת הטורניר ומלך השערים</h3>
+                <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)' }}>
+                  בחר את הנבחרת שתניף את הגביע ואת השחקן שיזכה בנעל הזהב! ניתן לשנות את הניחושים עד שריקת הפתיחה של הטורניר ב-11 ביוני 2026 בשעה 22:00 (שעון ישראל).
+                </p>
+
+                {isTournamentLocked() && (
+                  <div className="long-term-locked-badge">
+                    <Lock size={18} />
+                    <span>הניחושים ננעלו! הטורניר כבר החל.</span>
+                  </div>
+                )}
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', marginTop: '1rem' }}>
+                  
+                  {/* Select Winner Team */}
+                  <div className="long-term-select-group">
+                    <label>🏆 מנצחת הטורניר (הנבחרת שתזכה בגביע)</label>
+                    
+                    {!isTournamentLocked() ? (
+                      <div className="searchable-select-wrapper">
+                        <div 
+                          className="selected-display-box" 
+                          style={{ cursor: 'pointer' }}
+                          onClick={() => setTeamDropdownOpen(!teamDropdownOpen)}
+                        >
+                          {selectedTeam ? (
+                            <>
+                              <img src={selectedTeam.crest} alt={selectedTeam.name} style={{ width: '30px', height: '20px', objectFit: 'cover', borderRadius: '3px' }} />
+                              <strong style={{ color: 'white' }}>{selectedTeam.name}</strong>
+                            </>
+                          ) : (
+                            <span style={{ color: 'var(--text-muted)' }}>בחר נבחרת...</span>
+                          )}
+                        </div>
+
+                        {teamDropdownOpen && (
+                          <div className="select-dropdown-list">
+                            <div style={{ padding: '0.5rem', borderBottom: '1px solid var(--border-light)', position: 'sticky', top: 0, background: 'var(--bg-surface-opaque)', zIndex: 10 }}>
+                              <input 
+                                type="text" 
+                                className="form-input searchable-select-input" 
+                                placeholder="חפש נבחרת..." 
+                                value={searchTeamQuery}
+                                onChange={e => setSearchTeamQuery(e.target.value)}
+                                onClick={e => e.stopPropagation()}
+                              />
+                            </div>
+                            {allTeams
+                              .filter(t => t.name.toLowerCase().includes(searchTeamQuery.toLowerCase()))
+                              .map(t => (
+                                <div 
+                                  key={t.id} 
+                                  className={`select-dropdown-item ${selectedTeam?.id === t.id ? 'selected' : ''}`}
+                                  onClick={() => {
+                                    setSelectedTeam(t);
+                                    setTeamDropdownOpen(false);
+                                    setSearchTeamQuery('');
+                                  }}
+                                >
+                                  <img src={t.crest} alt={t.name} style={{ width: '24px', height: '16px', objectFit: 'cover', borderRadius: '2px' }} />
+                                  <span>{t.name}</span>
+                                </div>
+                              ))}
+                            {allTeams.filter(t => t.name.toLowerCase().includes(searchTeamQuery.toLowerCase())).length === 0 && (
+                              <div style={{ padding: '1rem', color: 'var(--text-muted)', textAlign: 'center' }}>לא נמצאו נבחרות</div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="selected-display-box" style={{ background: 'rgba(255,255,255,0.01)', opacity: 0.8 }}>
+                        {selectedTeam ? (
+                          <>
+                            <img src={selectedTeam.crest} alt={selectedTeam.name} style={{ width: '30px', height: '20px', objectFit: 'cover', borderRadius: '3px' }} />
+                            <strong style={{ color: 'white' }}>{selectedTeam.name}</strong>
+                          </>
+                        ) : (
+                          <span style={{ color: 'var(--text-muted)' }}>לא נבחרה נבחרת</span>
+                        )}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Select Top Scorer Player */}
+                  <div className="long-term-select-group">
+                    <label>🎯 מלך השערים (השחקן שיזכה בנעל הזהב)</label>
+                    
+                    {!isTournamentLocked() ? (
+                      <div className="searchable-select-wrapper">
+                        <div 
+                          className="selected-display-box" 
+                          style={{ cursor: 'pointer' }}
+                          onClick={() => setPlayerDropdownOpen(!playerDropdownOpen)}
+                        >
+                          {selectedPlayer ? (
+                            <div style={{ display: 'flex', flexDirection: 'column' }}>
+                              <strong style={{ color: 'white' }}>{selectedPlayer.name}</strong>
+                              <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+                                {selectedPlayer.position} | {allTeams.find(t => String(t.id) === String(selectedPlayer.team_id))?.name || 'נבחרת'}
+                              </span>
+                            </div>
+                          ) : (
+                            <span style={{ color: 'var(--text-muted)' }}>בחר שחקן...</span>
+                          )}
+                        </div>
+
+                        {playerDropdownOpen && (
+                          <div className="select-dropdown-list">
+                            <div style={{ padding: '0.5rem', borderBottom: '1px solid var(--border-light)', position: 'sticky', top: 0, background: 'var(--bg-surface-opaque)', zIndex: 10 }}>
+                              <input 
+                                type="text" 
+                                className="form-input searchable-select-input" 
+                                placeholder="חפש שחקן לפי שם..." 
+                                value={searchPlayerQuery}
+                                onChange={e => setSearchPlayerQuery(e.target.value)}
+                                onClick={e => e.stopPropagation()}
+                              />
+                            </div>
+                            {allPlayers
+                              .filter(p => p.name.toLowerCase().includes(searchPlayerQuery.toLowerCase()))
+                              .map(p => {
+                                const team = allTeams.find(t => String(t.id) === String(p.team_id));
+                                return (
+                                  <div 
+                                    key={p.id} 
+                                    className={`select-dropdown-item ${selectedPlayer?.id === p.id ? 'selected' : ''}`}
+                                    onClick={() => {
+                                      setSelectedPlayer(p);
+                                      setPlayerDropdownOpen(false);
+                                      setSearchPlayerQuery('');
+                                    }}
+                                    style={{ justifyContent: 'space-between' }}
+                                  >
+                                    <div style={{ display: 'flex', flexDirection: 'column' }}>
+                                      <span>{p.name}</span>
+                                      <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>{p.position}</span>
+                                    </div>
+                                    {team && (
+                                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                                        <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>{team.name}</span>
+                                        <img src={team.crest} alt={team.name} style={{ width: '18px', height: '12px', objectFit: 'cover', borderRadius: '1px' }} />
+                                      </div>
+                                    )}
+                                  </div>
+                                );
+                              })}
+                            {allPlayers.filter(p => p.name.toLowerCase().includes(searchPlayerQuery.toLowerCase())).length === 0 && (
+                              <div style={{ padding: '1rem', color: 'var(--text-muted)', textAlign: 'center' }}>לא נמצאו שחקנים במערכת</div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="selected-display-box" style={{ background: 'rgba(255,255,255,0.01)', opacity: 0.8 }}>
+                        {selectedPlayer ? (
+                          <div style={{ display: 'flex', flexDirection: 'column' }}>
+                            <strong style={{ color: 'white' }}>{selectedPlayer.name}</strong>
+                            <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+                              {selectedPlayer.position} | {allTeams.find(t => String(t.id) === String(selectedPlayer.team_id))?.name || 'נבחרת'}
+                            </span>
+                          </div>
+                        ) : (
+                          <span style={{ color: 'var(--text-muted)' }}>לא נבחר שחקן</span>
+                        )}
+                      </div>
+                    )}
+                  </div>
+
+                </div>
+
+                {!isTournamentLocked() && (
+                  <button 
+                    className="btn btn-primary" 
+                    style={{ width: '100%', marginTop: '1.5rem', padding: '1rem' }}
+                    onClick={saveLongTermPredictionAction}
+                    disabled={longTermSaving}
+                  >
+                    <Trophy size={18} />
+                    {longTermSaving ? 'שומר ניחושים...' : 'שמור ניחושים ארוכי טווח 💾'}
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* LEFT SIDE: Leaderboard widget shown next to everything on Desktop */}
@@ -952,23 +1281,21 @@ function App() {
               </button>
             </div>
 
-            {/* If Exact Score, render inputs */}
-            {betType === 'EXACT_SCORE' && (
-              <div style={{ textAlign: 'center', marginBottom: '1rem' }}>
-                <span className="betslip-multiplier-badge">ניקוד פרימיום של 5 נקודות בניחוש מדויק! ⭐</span>
-                <div className="score-inputs">
-                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                    <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '0.25rem' }}>{betSlipMatch.homeTeam}</span>
-                    <input type="number" className="form-input score-input-box" min="0" max="9" value={predHome} onChange={e => setPredHome(parseInt(e.target.value) || 0)} />
-                  </div>
-                  <span style={{ fontSize: '2rem', color: 'var(--text-muted)', paddingTop: '1rem' }}>-</span>
-                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                    <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '0.25rem' }}>{betSlipMatch.awayTeam}</span>
-                    <input type="number" className="form-input score-input-box" min="0" max="9" value={predAway} onChange={e => setPredAway(parseInt(e.target.value) || 0)} />
-                  </div>
+            {/* If Exact Score, render inputs - static container with smooth transitions */}
+            <div className={`betslip-exact-score-container ${betType === 'EXACT_SCORE' ? 'active' : ''}`}>
+              <span className="betslip-multiplier-badge">ניקוד פרימיום של 5 נקודות בניחוש מדויק! ⭐</span>
+              <div className="score-inputs">
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                  <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '0.25rem' }}>{betSlipMatch.homeTeam}</span>
+                  <input type="number" className="form-input score-input-box" min="0" max="9" value={predHome} onChange={e => setPredHome(parseInt(e.target.value) || 0)} />
+                </div>
+                <span style={{ fontSize: '2rem', color: 'var(--text-muted)', paddingTop: '1rem' }}>-</span>
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                  <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '0.25rem' }}>{betSlipMatch.awayTeam}</span>
+                  <input type="number" className="form-input score-input-box" min="0" max="9" value={predAway} onChange={e => setPredAway(parseInt(e.target.value) || 0)} />
                 </div>
               </div>
-            )}
+            </div>
 
             {/* Community Distribution - Shown if user has saved prediction */}
             {betSlipMatch.myBet && betSlipMatch.predictionDistribution && (

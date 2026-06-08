@@ -1098,3 +1098,203 @@ header {
   margin-top: 0.15rem;
 }
 
+/* Exact Score UI stability */
+.betslip-exact-score-container {
+  height: 0;
+  opacity: 0;
+  overflow: hidden;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  text-align: center;
+  margin-bottom: 0;
+}
+
+.betslip-exact-score-container.active {
+  height: 140px;
+  opacity: 1;
+  margin-bottom: 1rem;
+}
+
+/* Mini community distribution under match card */
+.match-community-distribution {
+  background: rgba(255, 255, 255, 0.015);
+  border: 1px solid var(--border-light);
+  border-top: none;
+  border-radius: 0 0 12px 12px;
+  padding: 0.6rem 1rem;
+  margin-top: -10px; /* merge with my-bet-indicator which has margin-top 0.5rem */
+  margin-bottom: 0.5rem;
+  font-size: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  box-shadow: inset 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+/* adjust my-bet-indicator border radius when distribution is present below it */
+.my-bet-indicator.has-distribution {
+  border-radius: 12px 12px 0 0 !important;
+  border-bottom: none !important;
+  margin-bottom: 0 !important;
+}
+
+.match-community-distribution .dist-title {
+  font-weight: 700;
+  color: var(--text-secondary);
+  font-size: 0.7rem;
+  margin-bottom: 0.15rem;
+}
+
+.match-community-distribution .dist-bars {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.5rem;
+}
+
+.match-community-distribution .dist-bar-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.match-community-distribution .dist-label {
+  display: flex;
+  justify-content: space-between;
+  color: var(--text-secondary);
+  font-size: 0.65rem;
+  font-weight: 500;
+}
+
+.match-community-distribution .dist-bg {
+  width: 100%;
+  height: 5px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.match-community-distribution .dist-fill {
+  height: 100%;
+  border-radius: 2px;
+}
+
+.match-community-distribution .dist-fill.home {
+  background: var(--primary);
+}
+
+.match-community-distribution .dist-fill.draw {
+  background: var(--text-secondary);
+}
+
+.match-community-distribution .dist-fill.away {
+  background: var(--accent);
+}
+
+.match-community-distribution .dist-fill.exact {
+  background: linear-gradient(90deg, var(--accent), var(--primary));
+}
+
+/* Long term prediction tournament page */
+.long-term-container {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.long-term-card {
+  padding: 2rem;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.long-term-locked-badge {
+  background: rgba(239, 68, 68, 0.12);
+  border: 1px solid var(--danger);
+  color: var(--danger);
+  font-weight: 700;
+  padding: 0.75rem 1rem;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  justify-content: center;
+  font-size: 1rem;
+  margin-top: 0.5rem;
+}
+
+.long-term-select-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  position: relative;
+}
+
+.long-term-select-group label {
+  font-weight: 700;
+  font-size: 1rem;
+  color: white;
+}
+
+.searchable-select-wrapper {
+  position: relative;
+}
+
+.search-input-icon {
+  position: absolute;
+  left: 1rem;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-muted);
+}
+
+.searchable-select-input {
+  padding-left: 2.5rem !important;
+}
+
+.select-dropdown-list {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  background: var(--bg-surface-opaque);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 12px;
+  max-height: 220px;
+  overflow-y: auto;
+  z-index: 100;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6);
+  margin-top: 4px;
+}
+
+.select-dropdown-item {
+  padding: 0.65rem 1rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  transition: var(--transition-smooth);
+}
+
+.select-dropdown-item:hover {
+  background: rgba(16, 185, 129, 0.08);
+  color: var(--primary);
+}
+
+.select-dropdown-item.selected {
+  background: rgba(16, 185, 129, 0.15);
+  color: var(--primary);
+  font-weight: 700;
+}
+
+.selected-display-box {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--border-light);
+  border-radius: 12px;
+  min-height: 50px;
+}
+

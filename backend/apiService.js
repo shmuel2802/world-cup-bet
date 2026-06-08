@@ -78,6 +78,7 @@ class FootballApiService {
 
       this.db.replaceMatches(formattedMatches);
       this.resolveFinishedBets();
+      this.syncScorers().catch(err => console.error("Auto scorers sync failed:", err.message));
       return true;
     } catch (error) {
       console.error("Error syncing with Football API:", error.message);
@@ -125,6 +126,45 @@ class FootballApiService {
     }
 
     console.log("Background player squads sync completed! ⚽✅");
+  }
+
+  // Fetch live top scorers from external API and update goals count for players
+  async syncScorers() {
+    const settings = this.db.getSettings();
+    const apiKey = process.env.FOOTBALL_API_KEY || settings.footballApiKey;
+
+    if (!apiKey) {
+      console.log("No Football API Key configured. Skipping scorers sync.");
+      return false;
+    }
+
+    try {
+      console.log("Syncing tournament top scorers from external API...");
+      const response = await axios.get('https://api.football-data.org/v4/competitions/WC/scorers', {
+        headers: { 'X-Auth-Token': apiKey }
+      });
+
+      const scorers = response.data.scorers;
+      if (!scorers || !scorers.length) return false;
+
+      const playersWithGoals = scorers.map(s => ({
+        id: `p_${s.player.id}`,
+        name: s.player.name,
+        position: s.player.position || 'Unknown',
+        dateOfBirth: s.player.dateOfBirth || '',
+        team_id: s.team.id,
+        goals: s.goals,
+        assists: s.assists || 0,
+        playedMatches: s.playedMatches || 0
+      }));
+
+      this.db.saveWorldCupPlayersBatch(playersWithGoals);
+      console.log(`[Scorers Sync] Successfully synced ${playersWithGoals.length} scorers from API ✅`);
+      return true;
+    } catch (error) {
+      console.error("[Scorers Sync] Error syncing scorers with Football API:", error.message);
+      return false;
+    }
   }
 
   // Maps external status to our status: SCHEDULED, LIVE, FINISHED

@@ -363,6 +363,76 @@ app.get('/api/leaderboard', authenticateToken, (req, res) => {
 });
 
 
+// --- TEAMS & PLAYERS ROUTES ---
+
+// Get all world cup teams
+app.get('/api/teams', authenticateToken, (req, res) => {
+  const teams = db.getWorldCupTeams();
+  res.json(teams);
+});
+
+// Get all world cup players
+app.get('/api/players', authenticateToken, (req, res) => {
+  const players = db.getWorldCupPlayers();
+  res.json(players);
+});
+
+
+// --- LONG-TERM TOURNAMENT PREDICTIONS ROUTES ---
+
+// Get current user's long-term predictions
+app.get('/api/predictions/long-term', authenticateToken, (req, res) => {
+  const prediction = db.getLongTermPredictionByUserId(req.user.id);
+  res.json(prediction || { userId: req.user.id, winnerTeamId: null, topScorerPlayerId: null });
+});
+
+// Save or update user's long-term predictions
+app.post('/api/predictions/long-term', authenticateToken, (req, res) => {
+  const { winnerTeamId, topScorerPlayerId } = req.body;
+  const userId = req.user.id;
+
+  // Strict deadline check: June 11, 2026, at 19:00 UTC
+  const KICKOFF_DATE = new Date('2026-06-11T19:00:00Z');
+  const now = new Date();
+
+  if (now > KICKOFF_DATE) {
+    return res.status(400).json({ message: 'הניחושים ננעלו! לא ניתן לשלוח ניחושים ארוכי טווח לאחר תחילת הטורניר.' });
+  }
+
+  if (!winnerTeamId || !topScorerPlayerId) {
+    return res.status(400).json({ message: 'אנא בחר מנצחת טורניר ומלך שערים.' });
+  }
+
+  // Verify team exists
+  const teams = db.getWorldCupTeams();
+  const teamExists = teams.some(t => String(t.id) === String(winnerTeamId));
+  if (!teamExists) {
+    return res.status(400).json({ message: 'נבחרת זו אינה קיימת במערכת.' });
+  }
+
+  // Verify player exists
+  const players = db.getWorldCupPlayers();
+  const playerExists = players.some(p => String(p.id) === String(topScorerPlayerId));
+  if (!playerExists) {
+    return res.status(400).json({ message: 'שחקן זה אינו קיים במערכת.' });
+  }
+
+  const prediction = {
+    userId,
+    winnerTeamId,
+    topScorerPlayerId,
+    updatedAt: new Date().toISOString()
+  };
+
+  db.saveLongTermPrediction(prediction);
+
+  res.json({
+    message: 'הניחושים ארוכי הטווח שלך נשמרו בהצלחה! 🏆⚽',
+    prediction
+  });
+});
+
+
 // --- ADMIN ROUTES ---
 
 // Sync matches from live external API

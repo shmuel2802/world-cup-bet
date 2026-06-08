@@ -61,6 +61,7 @@ function ensureSystemData(data) {
   if (!Array.isArray(data.bets)) data.bets = [];
   if (!Array.isArray(data.worldCupTeams)) data.worldCupTeams = [];
   if (!Array.isArray(data.worldCupPlayers)) data.worldCupPlayers = [];
+  if (!Array.isArray(data.longTermPredictions)) data.longTermPredictions = [];
   if (!data.settings || typeof data.settings !== 'object') {
     data.settings = {};
   }
@@ -314,6 +315,22 @@ const db = {
       }
     });
     writeDb(data);
+  },
+
+  getLongTermPredictionByUserId: (userId) => {
+    return readDb().longTermPredictions?.find(p => p.userId === userId) || null;
+  },
+  saveLongTermPrediction: (prediction) => {
+    const data = readDb();
+    if (!data.longTermPredictions) data.longTermPredictions = [];
+    const index = data.longTermPredictions.findIndex(p => p.userId === prediction.userId);
+    if (index !== -1) {
+      data.longTermPredictions[index] = prediction;
+    } else {
+      data.longTermPredictions.push(prediction);
+    }
+    writeDb(data);
+    return prediction;
   },
 
   getSettings: () => readDb().settings,
