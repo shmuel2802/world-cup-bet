@@ -36,3 +36,8 @@ lerna-debug.log*
 *.njsproj
 *.sln
 *.sw?
+
+# JDK and preview scripts
+**/oracleJdk-26/
+**/.preview-server.*
+

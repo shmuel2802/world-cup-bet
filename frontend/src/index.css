@@ -1,32 +1,31 @@
-@import url("https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap");
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap');
 
 :root {
   --bg-main: #0a0b0d;
   --bg-surface: rgba(18, 22, 31, 0.7);
   --bg-surface-opaque: #12161f;
   --bg-surface-hover: rgba(30, 37, 51, 0.85);
-
+  
   --primary: #10b981; /* Electric Emerald */
   --primary-glow: rgba(16, 185, 129, 0.35);
   --primary-dark: #059669;
-
+  
   --accent: #f59e0b; /* Championship Gold */
   --accent-glow: rgba(245, 158, 11, 0.3);
   --accent-dark: #d97706;
 
   --danger: #ef4444;
   --danger-glow: rgba(239, 68, 68, 0.25);
-
+  
   --text-primary: #f3f4f6;
   --text-secondary: #9ca3af;
   --text-muted: #6b7280;
-
+  
   --border-light: rgba(255, 255, 255, 0.08);
   --border-active: rgba(16, 185, 129, 0.4);
-
-  --font-sans:
-    "Outfit", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-
+  
+  --font-sans: 'Outfit', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  
   --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   --glass-filter: blur(16px) saturate(180%);
 }
@@ -43,17 +42,9 @@ body {
   color: var(--text-primary);
   min-height: 100vh;
   overflow-x: hidden;
-  background-image:
-    radial-gradient(
-      circle at 10% 20%,
-      rgba(16, 185, 129, 0.06) 0%,
-      transparent 40%
-    ),
-    radial-gradient(
-      circle at 90% 80%,
-      rgba(245, 158, 11, 0.05) 0%,
-      transparent 40%
-    );
+  background-image: 
+    radial-gradient(circle at 10% 20%, rgba(16, 185, 129, 0.06) 0%, transparent 40%),
+    radial-gradient(circle at 90% 80%, rgba(245, 158, 11, 0.05) 0%, transparent 40%);
   background-attachment: fixed;
 }
 
@@ -229,7 +220,7 @@ header {
 }
 
 .auth-card::before {
-  content: "";
+  content: '';
   position: absolute;
   top: 0;
   left: 0;
@@ -275,43 +266,6 @@ header {
   font-family: var(--font-sans);
   font-size: 1rem;
   transition: var(--transition-smooth);
-}
-
-.dark-select {
-  background: #05070f !important;
-  border: 1px solid rgba(255, 255, 255, 0.12) !important;
-  color: #e5e7eb !important;
-  border-radius: 14px !important;
-  padding: 0.85rem 1rem !important;
-  font-family: var(--font-sans) !important;
-  cursor: pointer;
-  box-shadow: inset 0 0 15px rgba(0, 0, 0, 0.3);
-  transition: var(--transition-smooth);
-}
-
-.dark-select:focus {
-  border-color: var(--primary) !important;
-  box-shadow: 0 0 10px var(--primary-glow) !important;
-  outline: none;
-}
-
-.dark-select option {
-  background: #05070f !important;
-  color: #f3f4f6 !important;
-  padding: 10px !important;
-}
-
-.spin-icon {
-  animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
 }
 
 .form-input:focus {
@@ -634,11 +588,7 @@ header {
   width: 40px;
   height: 40px;
   border-radius: 50%;
-  background: linear-gradient(
-    135deg,
-    var(--bg-surface-opaque),
-    rgba(255, 255, 255, 0.15)
-  );
+  background: linear-gradient(135deg, var(--bg-surface-opaque), rgba(255, 255, 255, 0.15));
   display: flex;
   align-items: center;
   justify-content: center;
@@ -692,81 +642,21 @@ header {
   backdrop-filter: blur(4px);
   z-index: 100;
   display: flex;
-  align-items: center;
+  align-items: flex-end;
   justify-content: center;
-  padding: 1rem;
 }
 
 .betslip-drawer {
-  width: min(520px, 100%);
-  max-width: 520px;
-  margin: 0 1rem;
-  box-sizing: border-box;
+  width: 100%;
+  max-width: 500px;
   background: var(--bg-surface-opaque);
-  border-radius: 24px;
+  border-top: 2px solid var(--primary);
+  border-radius: 24px 24px 0 0;
   padding: 2rem;
-  box-shadow: 0 0 40px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.5);
   animation: slideUp 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   max-height: 90vh;
-  overflow: visible;
-}
-
-/* Horizontal options strip inside bet slip */
-.odds-strip {
-  display: flex;
-  gap: 0.5rem;
-  overflow-x: auto;
-  white-space: nowrap;
-  -webkit-overflow-scrolling: touch;
-  padding-bottom: 0.25rem;
-}
-
-.odds-strip::-webkit-scrollbar {
-  display: none;
-}
-
-.odds-strip {
-  scrollbar-width: none; /* Firefox */
-}
-
-.option-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.6rem 0.9rem;
-  border-radius: 12px;
-  border: 1px solid var(--border-light);
-  background: transparent;
-  color: var(--text-secondary);
-  cursor: pointer;
-  flex-shrink: 0;
-  transition: var(--transition-smooth);
-}
-
-.option-btn .odds-value {
-  font-weight: 700;
-  color: var(--text-primary);
-}
-
-.option-btn.active {
-  background: var(--primary);
-  color: #042f1a;
-  border-color: var(--primary);
-  box-shadow: 0 6px 18px rgba(16, 185, 129, 0.18);
-}
-
-/* Community distribution bars */
-.dist-bar-bg {
-  background: rgba(255, 255, 255, 0.03);
-  height: 10px;
-  border-radius: 999px;
-  overflow: hidden;
-  border: 1px solid var(--border-light);
-}
-
-.dist-bar {
-  height: 100%;
-  border-radius: 999px;
+  overflow-y: hidden;
 }
 
 .betslip-header {
@@ -858,36 +748,20 @@ header {
 
 /* Animation Keyframes */
 @keyframes pulse {
-  0% {
-    opacity: 0.4;
-  }
-  50% {
-    opacity: 1;
-  }
-  100% {
-    opacity: 0.4;
-  }
+  0% { opacity: 0.4; }
+  50% { opacity: 1; }
+  100% { opacity: 0.4; }
 }
 
 @keyframes slideUp {
-  from {
-    transform: translateY(100%);
-  }
-  to {
-    transform: translateY(0);
-  }
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
 }
 
 @keyframes float {
-  0% {
-    transform: translateY(0px);
-  }
-  50% {
-    transform: translateY(-4px);
-  }
-  100% {
-    transform: translateY(0px);
-  }
+  0% { transform: translateY(0px); }
+  50% { transform: translateY(-4px); }
+  100% { transform: translateY(0px); }
 }
 
 /* ==========================================
@@ -1118,3 +992,109 @@ header {
     font-size: 1.6rem;
   }
 }
+
+/* Horizontal scrolling strip for betting options */
+.betslip-options-strip {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1.5rem;
+  overflow-x: auto;
+  white-space: nowrap;
+  flex-wrap: nowrap;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: 8px;
+  flex-shrink: 0;
+}
+
+/* Hide scrollbar track completely */
+.betslip-options-strip::-webkit-scrollbar {
+  display: none;
+}
+
+.betslip-options-strip {
+  -ms-overflow-style: none;  /* IE and Edge */
+  scrollbar-width: none;  /* Firefox */
+}
+
+.betslip-options-strip .tab-btn {
+  flex: 0 0 auto;
+  flex-shrink: 0;
+  min-width: 130px;
+  padding: 0.75rem 1rem;
+  flex-direction: row !important;
+  font-size: 0.85rem !important;
+  border-radius: 10px !important;
+}
+
+/* Community Distribution breakdown styles */
+.community-distribution {
+  margin-top: 1.5rem;
+  padding: 1rem 1.25rem;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--border-light);
+  border-radius: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.community-distribution h4 {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: 0.15rem;
+}
+
+.distribution-bar-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.distribution-bar-label {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+}
+
+.distribution-progress-bg {
+  width: 100%;
+  height: 8px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.distribution-progress-fill {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.distribution-progress-fill.home {
+  background: var(--primary);
+  box-shadow: 0 0 8px var(--primary-glow);
+}
+
+.distribution-progress-fill.draw {
+  background: var(--text-secondary);
+}
+
+.distribution-progress-fill.away {
+  background: var(--accent);
+  box-shadow: 0 0 8px var(--accent-glow);
+}
+
+.distribution-progress-fill.exact {
+  background: linear-gradient(90deg, var(--accent), var(--primary));
+  box-shadow: 0 0 8px var(--accent-glow);
+}
+
+.distribution-total-votes {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  text-align: left;
+  margin-top: 0.15rem;
+}
+

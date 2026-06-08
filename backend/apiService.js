@@ -1,4 +1,4 @@
-const axios = require("axios");
+const axios = require('axios');
 
 // Fetch real football matches from Football-Data.org if key is provided, or simulate updates
 class FootballApiService {
@@ -7,431 +7,156 @@ class FootballApiService {
   }
 
   // Fetch or update match data
-  async syncMatches(options = {}) {
+  async syncMatches() {
     const settings = this.db.getSettings();
-    const apiKey =
-      process.env.FOOTBALL_API_KEY ||
-      process.env.API_FOOTBALL_API_KEY ||
-      settings.footballApiKey;
+    const apiKey = process.env.FOOTBALL_API_KEY || settings.footballApiKey;
 
     if (!apiKey) {
-      console.log(
-        "No Football API Key configured. Skipping matches sync. Set FOOTBALL_API_KEY or API_FOOTBALL_API_KEY.",
-      );
+      console.log("No Football API Key configured. Skipping matches sync.");
       return false;
     }
 
     try {
-      const [matchesResponse, teamsResponse] = await Promise.all([
-        axios.get("https://api.football-data.org/v4/competitions/WC/matches", {
-          headers: { "X-Auth-Token": apiKey },
-        }),
-        axios.get("https://api.football-data.org/v4/competitions/WC/teams", {
-          headers: { "X-Auth-Token": apiKey },
-        }),
-      ]);
+      // In a real environment, we would query the World Cup matches:
+      // HTTP GET api.football-data.org/v4/competitions/WC/matches
+      const response = await axios.get('https://api.football-data.org/v4/competitions/WC/matches', {
+        headers: { 'X-Auth-Token': apiKey }
+      });
 
-      const externalMatches = matchesResponse.data.matches;
-      const externalTeams = teamsResponse?.data?.teams || [];
-
-      const matchTeams = new Map();
-      if (Array.isArray(externalMatches)) {
-        externalMatches.forEach((m) => {
-          [m.homeTeam, m.awayTeam].forEach((team) => {
-            const teamRecord = this.mapTeamRecord(team);
-            if (teamRecord) {
-              matchTeams.set(teamRecord.id, teamRecord);
-            }
-          });
-        });
-      }
-
-      if (matchTeams.size) {
-        this.db.saveTeamsBatch([...matchTeams.values()]);
-      }
-
-      if (Array.isArray(externalTeams) && externalTeams.length) {
-        const apiTeams = externalTeams
-          .map((team) => this.mapTeamRecord(team))
-          .filter(Boolean);
-        this.db.saveTeamsBatch(apiTeams);
-      }
-
+      const externalMatches = response.data.matches;
       if (!externalMatches || !externalMatches.length) return false;
 
-      const existingMatches = this.db.getMatches();
-      const existingMatchById = new Map(
-        existingMatches.map((match) => [match.id, match]),
-      );
+      // Extract unique teams from externalMatches
+      const teamsMap = new Map();
+      externalMatches.forEach(m => {
+        if (m.homeTeam && m.homeTeam.id) {
+          teamsMap.set(m.homeTeam.id, m.homeTeam);
+        }
+        if (m.awayTeam && m.awayTeam.id) {
+          teamsMap.set(m.awayTeam.id, m.awayTeam);
+        }
+      });
 
-      const scorerUpdates = [];
-      const formattedMatches = externalMatches.map((m) => {
-        const matchId = `real_${m.id}`;
-        const previousMatch = existingMatchById.get(matchId);
-        const homeTla = (m.homeTeam?.tla || "un").toLowerCase().slice(0, 2);
-        const awayTla = (m.awayTeam?.tla || "un").toLowerCase().slice(0, 2);
+      const teamsArray = Array.from(teamsMap.values()).map(t => ({
+        id: t.id,
+        name: t.name || t.shortName || 'TBD',
+        tla: t.tla || '',
+        crest: t.crest || '',
+        flag: t.crest || '' // compatibility
+      }));
 
-        const mappedMatch = {
-          id: matchId,
-          homeTeam: m.homeTeam?.name || m.homeTeam?.shortName || "TBD",
-          awayTeam: m.awayTeam?.name || m.awayTeam?.shortName || "TBD",
-          homeFlag:
-            m.homeTeam?.crest || `https://flagcdn.com/w160/${homeTla}.png`,
-          awayFlag:
-            m.awayTeam?.crest || `https://flagcdn.com/w160/${awayTla}.png`,
+      // Batch save teams into worldCupTeams
+      this.db.saveWorldCupTeamsBatch(teamsArray);
+
+      // Trigger player squads sync in background
+      const teamIds = Array.from(teamsMap.keys());
+      this.syncPlayerSquads(teamIds, apiKey).catch(err => {
+        console.error("Background player squads sync failed:", err.message);
+      });
+
+      const formattedMatches = externalMatches.map(m => {
+        const homeTla = (m.homeTeam?.tla || 'un').toLowerCase().slice(0, 2);
+        const awayTla = (m.awayTeam?.tla || 'un').toLowerCase().slice(0, 2);
+
+        // Map API response to our database schema
+        return {
+          id: `real_${m.id}`,
+          homeTeam: m.homeTeam?.name || m.homeTeam?.shortName || 'TBD',
+          awayTeam: m.awayTeam?.name || m.awayTeam?.shortName || 'TBD',
+          homeFlag: m.homeTeam?.crest || `https://flagcdn.com/w160/${homeTla}.png`,
+          awayFlag: m.awayTeam?.crest || `https://flagcdn.com/w160/${awayTla}.png`,
           status: this.mapStatus(m.status),
           utcDate: m.utcDate,
-          homeScore:
-            m.score?.fullTime?.home !== null &&
-            m.score?.fullTime?.home !== undefined
-              ? m.score.fullTime.home
-              : (m.score?.halfTime?.home ?? null),
-          awayScore:
-            m.score?.fullTime?.away !== null &&
-            m.score?.fullTime?.away !== undefined
-              ? m.score.fullTime.away
-              : (m.score?.halfTime?.away ?? null),
+          homeScore: m.score?.fullTime?.home !== null && m.score?.fullTime?.home !== undefined ? m.score.fullTime.home : null,
+          awayScore: m.score?.fullTime?.away !== null && m.score?.fullTime?.away !== undefined ? m.score.fullTime.away : null,
           stage: this.translateStage(m.stage),
-          homeOdds: 2.0,
+          homeOdds: 2.0, // Odds would be generated or constant since free APIs don't usually provide odds
           drawOdds: 3.2,
-          awayOdds: 2.8,
-          source: "football-data",
-          scorerSyncFingerprint: this.buildMatchSyncFingerprint(m),
+          awayOdds: 2.8
         };
-
-        const mergedMatch = previousMatch
-          ? { ...previousMatch, ...mappedMatch }
-          : mappedMatch;
-
-        const shouldProcessScorers =
-          !previousMatch ||
-          previousMatch.scorerSyncFingerprint !==
-            mergedMatch.scorerSyncFingerprint;
-
-        if (shouldProcessScorers) {
-          const apiScorers = this.extractScorers(m);
-          if (apiScorers.length) {
-            scorerUpdates.push(
-              ...apiScorers.map((entry) => ({
-                ...entry,
-                matchId,
-                teamName: entry.teamName || entry.team || mergedMatch.homeTeam,
-              })),
-            );
-          } else if (Array.isArray(options.manualScorers)) {
-            scorerUpdates.push(
-              ...options.manualScorers.filter(
-                (entry) => entry.matchId === matchId,
-              ),
-            );
-          } else {
-            scorerUpdates.push(
-              ...this.buildFallbackScorers(mergedMatch, previousMatch),
-            );
-          }
-        }
-
-        return mergedMatch;
       });
 
       this.db.replaceMatches(formattedMatches);
-      const uniqueTeamIds = Array.from(matchTeams.values()).map((team) =>
-        team.id.replace(/^team_/, ""),
-      );
-      const squadPlayersSynced = await this.syncTeamSquads(
-        uniqueTeamIds,
-        apiKey,
-      );
-
-      if (scorerUpdates.length) {
-        this.updatePlayersFromScorers(scorerUpdates);
-      }
-      this.refreshTopScorers();
       this.resolveFinishedBets();
-
-      return {
-        success: true,
-        syncedMatches: formattedMatches.length,
-        scoredEntries: scorerUpdates.length,
-        syncedPlayers: squadPlayersSynced.length,
-      };
+      return true;
     } catch (error) {
       console.error("Error syncing with Football API:", error.message);
       return false;
     }
   }
 
-  extractScorers(match) {
-    const rawScorers =
-      match.scorers ||
-      match.goals ||
-      match.goalScorers ||
-      match.scorer ||
-      match.score?.scorers ||
-      [];
+  // Asynchronously fetch player squads for the unique team IDs with 6 seconds delay between requests
+  async syncPlayerSquads(teamIds, apiKey) {
+    console.log(`Starting background sync of player squads for ${teamIds.length} teams...`);
+    const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
-    const flattenScorers = (payload) => {
-      if (!payload) return [];
-      if (Array.isArray(payload)) return payload;
-      if (typeof payload === "object") {
-        if (Array.isArray(payload.home) || Array.isArray(payload.away)) {
-          return [...(payload.home || []), ...(payload.away || [])];
-        }
-        return [payload];
-      }
-      return [];
-    };
-
-    const items = flattenScorers(rawScorers);
-    return items
-      .map((entry) => {
-        if (!entry) return null;
-        const playerName =
-          entry.player?.name ||
-          entry.name ||
-          entry.playerName ||
-          entry.scorer ||
-          entry.person?.name;
-        const teamName =
-          entry.team?.name || entry.teamName || entry.team || entry.side;
-        const goals =
-          typeof entry.goals === "number"
-            ? entry.goals
-            : typeof entry.goalCount === "number"
-              ? entry.goalCount
-              : 1;
-
-        if (!playerName) return null;
-        return {
-          playerId: entry.player?.id
-            ? `p_${entry.player.id}`
-            : this.normalizePlayerId(playerName),
-          playerName,
-          teamName: teamName || "Unknown",
-          goals,
-        };
-      })
-      .filter(Boolean);
-  }
-
-  normalizePlayerId(name) {
-    return `p_${name
-      .toString()
-      .toLowerCase()
-      .trim()
-      .replace(/[\s\W]+/g, "_")}`;
-  }
-
-  buildMatchSyncFingerprint(match) {
-    const home = match.score?.fullTime?.home ?? match.homeScore ?? "null";
-    const away = match.score?.fullTime?.away ?? match.awayScore ?? "null";
-    const scorerList = this.extractScorers(match)
-      .map((entry) => `${entry.playerName}:${entry.teamName}:${entry.goals}`)
-      .sort()
-      .join("|");
-    return `${match.id || "unknown"}:${home}-${away}:${match.status || ""}:${scorerList}`;
-  }
-
-  mapTeamRecord(team) {
-    if (!team || typeof team.id === "undefined" || team.id === null)
-      return null;
-    const tla = (team.tla || team.shortName || team.name || "")
-      .toString()
-      .trim();
-    return {
-      id: `team_${team.id}`,
-      team_id: `team_${team.id}`,
-      name: team.name || team.shortName || "TBD",
-      tla,
-      crest: team.crest || team.crestUrl || team.logo || team.crestUrl || null,
-    };
-  }
-
-  delay(ms) {
-    return new Promise((resolve) => setTimeout(resolve, ms));
-  }
-
-  async syncTeamSquads(teamIds, apiKey) {
-    if (!Array.isArray(teamIds) || !teamIds.length) return [];
-
-    const syncedPlayers = [];
-    for (let i = 0; i < teamIds.length; i += 1) {
+    for (let i = 0; i < teamIds.length; i++) {
       const teamId = teamIds[i];
+      console.log(`[Squad Sync] Fetching squad for team ID ${teamId} (${i + 1}/${teamIds.length})...`);
+
       try {
-        const teamResponse = await axios.get(
-          `https://api.football-data.org/v4/teams/${teamId}`,
-          {
-            headers: { "X-Auth-Token": apiKey },
-          },
-        );
+        const response = await axios.get(`https://api.football-data.org/v4/teams/${teamId}`, {
+          headers: { 'X-Auth-Token': apiKey }
+        });
 
-        const teamData = teamResponse.data;
-        const teamRecord = this.mapTeamRecord(teamData);
-        if (teamRecord) {
-          this.db.saveTeam(teamRecord);
-        }
+        const squad = response.data.squad;
+        if (squad && squad.length) {
+          const players = squad.map(p => ({
+            id: p.id ? `p_${p.id}` : 'p_' + Math.random().toString(36).substr(2, 9),
+            name: p.name,
+            position: p.position || 'Unknown',
+            dateOfBirth: p.dateOfBirth || '',
+            team_id: teamId
+          }));
 
-        const squad = Array.isArray(teamData.squad) ? teamData.squad : [];
-        const players = squad
-          .map((player) => {
-            const playerName = player.name || player.fullName || "Unknown";
-            const playerId = player.id
-              ? `player_${player.id}`
-              : this.normalizePlayerId(`${playerName}_${teamId}`);
-            return {
-              id: playerId,
-              name: playerName,
-              position: player.position || "Unknown",
-              dateOfBirth: player.dateOfBirth || null,
-              team: teamRecord?.name || teamData.name || "Unknown",
-              team_id: teamRecord?.id || `team_${teamId}`,
-              goals_scored: 0,
-            };
-          })
-          .filter((entry) => entry.id && entry.name);
-
-        if (players.length) {
-          this.db.savePlayersBatch(players);
-          syncedPlayers.push(...players);
+          this.db.saveWorldCupPlayersBatch(players);
+          console.log(`[Squad Sync] Successfully synced ${players.length} players for team ID ${teamId} ✅`);
+        } else {
+          console.log(`[Squad Sync] No squad found for team ID ${teamId}.`);
         }
       } catch (error) {
-        console.error(`Error syncing squad for team ${teamId}:`, error.message);
+        console.error(`[Squad Sync] Failed to sync squad for team ID ${teamId}:`, error.message);
       }
 
+      // 6 seconds delay to respect rate limit (10 requests/minute)
       if (i < teamIds.length - 1) {
-        await this.delay(6000);
+        await delay(6000);
       }
     }
 
-    return syncedPlayers;
-  }
-
-  buildFallbackScorers(formattedMatch, previousMatch) {
-    const homeDelta = this.computeGoalDelta(
-      formattedMatch.homeScore,
-      previousMatch?.homeScore,
-    );
-    const awayDelta = this.computeGoalDelta(
-      formattedMatch.awayScore,
-      previousMatch?.awayScore,
-    );
-
-    return [
-      ...this.simulateTeamGoals(
-        formattedMatch.homeTeam,
-        homeDelta,
-        formattedMatch.id,
-      ),
-      ...this.simulateTeamGoals(
-        formattedMatch.awayTeam,
-        awayDelta,
-        formattedMatch.id,
-      ),
-    ];
-  }
-
-  computeGoalDelta(current, previous) {
-    if (current === null || current === undefined) return 0;
-    if (previous === null || previous === undefined) return current;
-    return Math.max(0, current - previous);
-  }
-
-  simulateTeamGoals(teamName, goals, matchId) {
-    if (!goals || goals <= 0) return [];
-    const teamPlayers = this.db
-      .getPlayers()
-      .filter((player) =>
-        player.team
-          ?.toLowerCase()
-          .includes(teamName?.toLowerCase().substring(0, 3)),
-      );
-    const candidates = teamPlayers.length
-      ? teamPlayers
-      : this.db.getPlayers().slice(0, 5);
-
-    if (!candidates.length) return [];
-    const simulated = [];
-    for (let i = 0; i < goals; i += 1) {
-      const player = candidates[i % candidates.length];
-      simulated.push({
-        matchId,
-        playerId: player.id,
-        playerName: player.name,
-        teamName: player.team,
-        increment: 1,
-        fallback: true,
-      });
-    }
-    return simulated;
-  }
-
-  updatePlayersFromScorers(entries) {
-    entries.forEach((entry) => {
-      const existing = this.db.getPlayerById(entry.playerId);
-      const player = existing
-        ? { ...existing }
-        : {
-            id: entry.playerId,
-            name: entry.playerName,
-            team: entry.teamName || "Unknown",
-            goals_scored: 0,
-          };
-
-      const currentGoals = Number(player.goals_scored) || 0;
-      if (typeof entry.goals === "number") {
-        player.goals_scored = Math.max(currentGoals, entry.goals);
-      } else if (typeof entry.increment === "number") {
-        player.goals_scored = currentGoals + entry.increment;
-      } else {
-        player.goals_scored = currentGoals + 1;
-      }
-
-      this.db.savePlayer(player);
-    });
-  }
-
-  refreshTopScorers() {
-    const players = this.db
-      .getPlayers()
-      .slice()
-      .sort(
-        (a, b) =>
-          b.goals_scored - a.goals_scored || a.name.localeCompare(b.name),
-      );
-    const topScorers = players.filter((p) => p.goals_scored > 0).slice(0, 15);
-    this.db.setTopScorers(topScorers);
+    console.log("Background player squads sync completed! ⚽✅");
   }
 
   // Maps external status to our status: SCHEDULED, LIVE, FINISHED
   mapStatus(externalStatus) {
     switch (externalStatus) {
-      case "TIMED":
-      case "SCHEDULED":
-        return "SCHEDULED";
-      case "IN_PLAY":
-      case "PAUSED":
-      case "LIVE":
-        return "LIVE";
-      case "FINISHED":
-      case "AWARDED":
-        return "FINISHED";
+      case 'TIMED':
+      case 'SCHEDULED':
+        return 'SCHEDULED';
+      case 'IN_PLAY':
+      case 'PAUSED':
+      case 'LIVE':
+        return 'LIVE';
+      case 'FINISHED':
+      case 'AWARDED':
+        return 'FINISHED';
       default:
-        return "SCHEDULED";
+        return 'SCHEDULED';
     }
   }
 
   // Translate stages to friendly Hebrew
   translateStage(stage) {
     const stages = {
-      GROUP_STAGE: "שלב הבתים",
-      ROUND_OF_16: "שמינית הגמר",
-      LAST_16: "שמינית הגמר",
-      QUARTER_FINALS: "רבע הגמר",
-      SEMI_FINALS: "חצי הגמר",
-      FINAL: "הגמר הגדול",
-      THIRD_PLACE: "הקרב על המקום השלישי",
+      'GROUP_STAGE': 'שלב הבתים',
+      'ROUND_OF_16': 'שמינית הגמר',
+      'LAST_16': 'שמינית הגמר',
+      'QUARTER_FINALS': 'רבע הגמר',
+      'SEMI_FINALS': 'חצי הגמר',
+      'FINAL': 'הגמר הגדול',
+      'THIRD_PLACE': 'הקרב על המקום השלישי'
     };
-    return stages[stage] || "מונדיאל";
+    return stages[stage] || 'מונדיאל';
   }
 
   // Process all bets for matches that are FINISHED but bets are still PENDING
@@ -442,32 +167,29 @@ class FootballApiService {
 
     let updatedBets = false;
 
-    bets.forEach((bet) => {
-      if (bet.status !== "PENDING") return;
+    bets.forEach(bet => {
+      if (bet.status !== 'PENDING') return;
 
-      const match = matches.find((m) => m.id === bet.matchId);
-      if (!match || match.status !== "FINISHED") return;
+      const match = matches.find(m => m.id === bet.matchId);
+      if (!match || match.status !== 'FINISHED') return;
 
-      const user = users.find((u) => u.id === bet.userId);
+      const user = users.find(u => u.id === bet.userId);
       if (!user) return;
 
       const homeScore = match.homeScore;
       const awayScore = match.awayScore;
 
       // Determine real outcome
-      let realOutcome = "DRAW";
-      if (homeScore > awayScore) realOutcome = "HOME";
-      if (homeScore < awayScore) realOutcome = "AWAY";
+      let realOutcome = 'DRAW';
+      if (homeScore > awayScore) realOutcome = 'HOME';
+      if (homeScore < awayScore) realOutcome = 'AWAY';
 
       let won = false;
       let multiplier = 1;
 
-      if (bet.betType === "EXACT_SCORE") {
+      if (bet.betType === 'EXACT_SCORE') {
         // Exact score prediction
-        if (
-          bet.predictedHomeScore === homeScore &&
-          bet.predictedAwayScore === awayScore
-        ) {
+        if (bet.predictedHomeScore === homeScore && bet.predictedAwayScore === awayScore) {
           won = true;
           multiplier = 5; // x5 multiplier for exact score!
         }
@@ -480,8 +202,9 @@ class FootballApiService {
       }
 
       // Update bet status
-      bet.status = won ? "WON" : "LOST";
-      bet.payout = won ? bet.amount * multiplier : 0;
+      bet.status = won ? 'WON' : 'LOST';
+      // Static scoring system: 2 points for correct outcome, 5 points for exact score
+      bet.payout = won ? (bet.betType === 'EXACT_SCORE' ? 5 : 2) : 0;
       updatedBets = true;
 
       // Update user wallet balance
@@ -490,15 +213,12 @@ class FootballApiService {
       }
 
       // Update user stats
-      const userBets = bets.filter((b) => b.userId === user.id);
-      const settledBets = userBets.filter((b) => b.status !== "PENDING");
-      const wonBets = settledBets.filter((b) => b.status === "WON");
-
+      const userBets = bets.filter(b => b.userId === user.id);
+      const settledBets = userBets.filter(b => b.status !== 'PENDING');
+      const wonBets = settledBets.filter(b => b.status === 'WON');
+      
       user.totalBets = settledBets.length;
-      user.winRate =
-        settledBets.length > 0
-          ? Math.round((wonBets.length / settledBets.length) * 100)
-          : 0;
+      user.winRate = settledBets.length > 0 ? Math.round((wonBets.length / settledBets.length) * 100) : 0;
 
       // Save user updates back to DB array (db will save it all together)
       this.db.saveUser(user);
