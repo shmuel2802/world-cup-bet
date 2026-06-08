@@ -9,7 +9,7 @@ const CLOUD_DB_URL = process.env.CLOUD_DB_URL;
 
 let inMemoryData = null;
 const DEFAULT_ADMIN_PASSWORD_HASH =
-  "$2b$10$9pZ8rBybS5ZfLdZ9X.4vNuZ7wXpYlC2D3q5mF9bE2zR8yG1hK3s2e"; // admin123 בפורמט $2b$
+  "$2b$10$jRGgvT5uxNcJjwL38z/FA.QF8gW4hKTmzJo6CazrsBuCsA1HRwthS"; // admin123 בפורמט $2b$
 // Initialize the database with seed data if it doesn't exist
 function getSeedData() {
   const seedData = {
