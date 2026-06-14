@@ -1,4 +1,4 @@
-const axios = require('axios');
+const axios = require("axios");
 
 // Fetch real football matches from Football-Data.org if key is provided, or simulate updates
 class FootballApiService {
@@ -19,16 +19,19 @@ class FootballApiService {
     try {
       // In a real environment, we would query the World Cup matches:
       // HTTP GET api.football-data.org/v4/competitions/WC/matches
-      const response = await axios.get('https://api.football-data.org/v4/competitions/WC/matches', {
-        headers: { 'X-Auth-Token': apiKey }
-      });
+      const response = await axios.get(
+        "https://api.football-data.org/v4/competitions/WC/matches",
+        {
+          headers: { "X-Auth-Token": apiKey },
+        },
+      );
 
       const externalMatches = response.data.matches;
       if (!externalMatches || !externalMatches.length) return false;
 
       // Extract unique teams from externalMatches
       const teamsMap = new Map();
-      externalMatches.forEach(m => {
+      externalMatches.forEach((m) => {
         if (m.homeTeam && m.homeTeam.id) {
           teamsMap.set(m.homeTeam.id, m.homeTeam);
         }
@@ -37,12 +40,12 @@ class FootballApiService {
         }
       });
 
-      const teamsArray = Array.from(teamsMap.values()).map(t => ({
+      const teamsArray = Array.from(teamsMap.values()).map((t) => ({
         id: t.id,
-        name: t.name || t.shortName || 'TBD',
-        tla: t.tla || '',
-        crest: t.crest || '',
-        flag: t.crest || '' // compatibility
+        name: t.name || t.shortName || "TBD",
+        tla: t.tla || "",
+        crest: t.crest || "",
+        flag: t.crest || "", // compatibility
       }));
 
       // Batch save teams into worldCupTeams
@@ -50,35 +53,47 @@ class FootballApiService {
 
       // Trigger player squads sync in background
       const teamIds = Array.from(teamsMap.keys());
-      this.syncPlayerSquads(teamIds, apiKey).catch(err => {
+      this.syncPlayerSquads(teamIds, apiKey).catch((err) => {
         console.error("Background player squads sync failed:", err.message);
       });
 
-      const formattedMatches = externalMatches.map(m => {
-        const homeTla = (m.homeTeam?.tla || 'un').toLowerCase().slice(0, 2);
-        const awayTla = (m.awayTeam?.tla || 'un').toLowerCase().slice(0, 2);
+      const formattedMatches = externalMatches.map((m) => {
+        const homeTla = (m.homeTeam?.tla || "un").toLowerCase().slice(0, 2);
+        const awayTla = (m.awayTeam?.tla || "un").toLowerCase().slice(0, 2);
 
         // Map API response to our database schema
         return {
           id: `real_${m.id}`,
-          homeTeam: m.homeTeam?.name || m.homeTeam?.shortName || 'TBD',
-          awayTeam: m.awayTeam?.name || m.awayTeam?.shortName || 'TBD',
-          homeFlag: m.homeTeam?.crest || `https://flagcdn.com/w160/${homeTla}.png`,
-          awayFlag: m.awayTeam?.crest || `https://flagcdn.com/w160/${awayTla}.png`,
+          homeTeam: m.homeTeam?.name || m.homeTeam?.shortName || "TBD",
+          awayTeam: m.awayTeam?.name || m.awayTeam?.shortName || "TBD",
+          homeFlag:
+            m.homeTeam?.crest || `https://flagcdn.com/w160/${homeTla}.png`,
+          awayFlag:
+            m.awayTeam?.crest || `https://flagcdn.com/w160/${awayTla}.png`,
           status: this.mapStatus(m.status),
           utcDate: m.utcDate,
-          homeScore: m.score?.fullTime?.home !== null && m.score?.fullTime?.home !== undefined ? m.score.fullTime.home : null,
-          awayScore: m.score?.fullTime?.away !== null && m.score?.fullTime?.away !== undefined ? m.score.fullTime.away : null,
+          homeScore:
+            m.score?.fullTime?.home !== null &&
+            m.score?.fullTime?.home !== undefined
+              ? m.score.fullTime.home
+              : null,
+          awayScore:
+            m.score?.fullTime?.away !== null &&
+            m.score?.fullTime?.away !== undefined
+              ? m.score.fullTime.away
+              : null,
           stage: this.translateStage(m.stage),
           homeOdds: 2.0, // Odds would be generated or constant since free APIs don't usually provide odds
           drawOdds: 3.2,
-          awayOdds: 2.8
+          awayOdds: 2.8,
         };
       });
 
       this.db.replaceMatches(formattedMatches);
       this.resolveFinishedBets();
-      this.syncScorers().catch(err => console.error("Auto scorers sync failed:", err.message));
+      this.syncScorers().catch((err) =>
+        console.error("Auto scorers sync failed:", err.message),
+      );
       return true;
     } catch (error) {
       console.error("Error syncing with Football API:", error.message);
@@ -88,35 +103,49 @@ class FootballApiService {
 
   // Asynchronously fetch player squads for the unique team IDs with 6 seconds delay between requests
   async syncPlayerSquads(teamIds, apiKey) {
-    console.log(`Starting background sync of player squads for ${teamIds.length} teams...`);
-    const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+    console.log(
+      `Starting background sync of player squads for ${teamIds.length} teams...`,
+    );
+    const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
     for (let i = 0; i < teamIds.length; i++) {
       const teamId = teamIds[i];
-      console.log(`[Squad Sync] Fetching squad for team ID ${teamId} (${i + 1}/${teamIds.length})...`);
+      console.log(
+        `[Squad Sync] Fetching squad for team ID ${teamId} (${i + 1}/${teamIds.length})...`,
+      );
 
       try {
-        const response = await axios.get(`https://api.football-data.org/v4/teams/${teamId}`, {
-          headers: { 'X-Auth-Token': apiKey }
-        });
+        const response = await axios.get(
+          `https://api.football-data.org/v4/teams/${teamId}`,
+          {
+            headers: { "X-Auth-Token": apiKey },
+          },
+        );
 
         const squad = response.data.squad;
         if (squad && squad.length) {
-          const players = squad.map(p => ({
-            id: p.id ? `p_${p.id}` : 'p_' + Math.random().toString(36).substr(2, 9),
+          const players = squad.map((p) => ({
+            id: p.id
+              ? `p_${p.id}`
+              : "p_" + Math.random().toString(36).substr(2, 9),
             name: p.name,
-            position: p.position || 'Unknown',
-            dateOfBirth: p.dateOfBirth || '',
-            team_id: teamId
+            position: p.position || "Unknown",
+            dateOfBirth: p.dateOfBirth || "",
+            team_id: teamId,
           }));
 
           this.db.saveWorldCupPlayersBatch(players);
-          console.log(`[Squad Sync] Successfully synced ${players.length} players for team ID ${teamId} ✅`);
+          console.log(
+            `[Squad Sync] Successfully synced ${players.length} players for team ID ${teamId} ✅`,
+          );
         } else {
           console.log(`[Squad Sync] No squad found for team ID ${teamId}.`);
         }
       } catch (error) {
-        console.error(`[Squad Sync] Failed to sync squad for team ID ${teamId}:`, error.message);
+        console.error(
+          `[Squad Sync] Failed to sync squad for team ID ${teamId}:`,
+          error.message,
+        );
       }
 
       // 6 seconds delay to respect rate limit (10 requests/minute)
@@ -140,29 +169,37 @@ class FootballApiService {
 
     try {
       console.log("Syncing tournament top scorers from external API...");
-      const response = await axios.get('https://api.football-data.org/v4/competitions/WC/scorers', {
-        headers: { 'X-Auth-Token': apiKey }
-      });
+      const response = await axios.get(
+        "https://api.football-data.org/v4/competitions/WC/scorers",
+        {
+          headers: { "X-Auth-Token": apiKey },
+        },
+      );
 
       const scorers = response.data.scorers;
       if (!scorers || !scorers.length) return false;
 
-      const playersWithGoals = scorers.map(s => ({
+      const playersWithGoals = scorers.map((s) => ({
         id: `p_${s.player.id}`,
         name: s.player.name,
-        position: s.player.position || 'Unknown',
-        dateOfBirth: s.player.dateOfBirth || '',
+        position: s.player.position || "Unknown",
+        dateOfBirth: s.player.dateOfBirth || "",
         team_id: s.team.id,
         goals: s.goals,
         assists: s.assists || 0,
-        playedMatches: s.playedMatches || 0
+        playedMatches: s.playedMatches || 0,
       }));
 
       this.db.saveWorldCupPlayersBatch(playersWithGoals);
-      console.log(`[Scorers Sync] Successfully synced ${playersWithGoals.length} scorers from API ✅`);
+      console.log(
+        `[Scorers Sync] Successfully synced ${playersWithGoals.length} scorers from API ✅`,
+      );
       return true;
     } catch (error) {
-      console.error("[Scorers Sync] Error syncing scorers with Football API:", error.message);
+      console.error(
+        "[Scorers Sync] Error syncing scorers with Football API:",
+        error.message,
+      );
       return false;
     }
   }
@@ -170,33 +207,33 @@ class FootballApiService {
   // Maps external status to our status: SCHEDULED, LIVE, FINISHED
   mapStatus(externalStatus) {
     switch (externalStatus) {
-      case 'TIMED':
-      case 'SCHEDULED':
-        return 'SCHEDULED';
-      case 'IN_PLAY':
-      case 'PAUSED':
-      case 'LIVE':
-        return 'LIVE';
-      case 'FINISHED':
-      case 'AWARDED':
-        return 'FINISHED';
+      case "TIMED":
+      case "SCHEDULED":
+        return "SCHEDULED";
+      case "IN_PLAY":
+      case "PAUSED":
+      case "LIVE":
+        return "LIVE";
+      case "FINISHED":
+      case "AWARDED":
+        return "FINISHED";
       default:
-        return 'SCHEDULED';
+        return "SCHEDULED";
     }
   }
 
   // Translate stages to friendly Hebrew
   translateStage(stage) {
     const stages = {
-      'GROUP_STAGE': 'שלב הבתים',
-      'ROUND_OF_16': 'שמינית הגמר',
-      'LAST_16': 'שמינית הגמר',
-      'QUARTER_FINALS': 'רבע הגמר',
-      'SEMI_FINALS': 'חצי הגמר',
-      'FINAL': 'הגמר הגדול',
-      'THIRD_PLACE': 'הקרב על המקום השלישי'
+      GROUP_STAGE: "שלב הבתים",
+      ROUND_OF_16: "שמינית הגמר",
+      LAST_16: "שמינית הגמר",
+      QUARTER_FINALS: "רבע הגמר",
+      SEMI_FINALS: "חצי הגמר",
+      FINAL: "הגמר הגדול",
+      THIRD_PLACE: "הקרב על המקום השלישי",
     };
-    return stages[stage] || 'מונדיאל';
+    return stages[stage] || "מונדיאל";
   }
 
   // Process all bets for matches that are FINISHED but bets are still PENDING
@@ -207,60 +244,83 @@ class FootballApiService {
 
     let updatedBets = false;
 
-    bets.forEach(bet => {
-      if (bet.status !== 'PENDING') return;
+    bets.forEach((bet) => {
+      if (bet.status !== "PENDING") return;
 
-      const match = matches.find(m => m.id === bet.matchId);
-      if (!match || match.status !== 'FINISHED') return;
+      const match = matches.find((m) => m.id === bet.matchId);
+      if (!match || match.status !== "FINISHED") return;
 
-      const user = users.find(u => u.id === bet.userId);
+      const user = users.find((u) => u.id === bet.userId);
       if (!user) return;
 
       const homeScore = match.homeScore;
       const awayScore = match.awayScore;
 
-      // Determine real outcome
-      let realOutcome = 'DRAW';
-      if (homeScore > awayScore) realOutcome = 'HOME';
-      if (homeScore < awayScore) realOutcome = 'AWAY';
+      // 1. קביעת התוצאה האמיתית של המשחק
+      let realOutcome = "DRAW";
+      if (homeScore > awayScore) realOutcome = "HOME";
+      if (homeScore < awayScore) realOutcome = "AWAY";
+
+      // 2. קביעת מה המשתמש ניחש בפועל (עבור הימור מדויק) כדי לבדוק כיוון
+      let predictedOutcome = null;
+      if (bet.betType === "EXACT_SCORE") {
+        if (bet.predictedHomeScore > bet.predictedAwayScore)
+          predictedOutcome = "HOME";
+        else if (bet.predictedHomeScore < bet.predictedAwayScore)
+          predictedOutcome = "AWAY";
+        else predictedOutcome = "DRAW";
+      } else {
+        predictedOutcome = bet.betType; // HOME, DRAW, או AWAY רגיל
+      }
 
       let won = false;
-      let multiplier = 1;
+      let pointsEarned = 0;
 
-      if (bet.betType === 'EXACT_SCORE') {
-        // Exact score prediction
-        if (bet.predictedHomeScore === homeScore && bet.predictedAwayScore === awayScore) {
+      // 3. חישוב הניקוד לפי הלוגיקה החדשה
+      if (bet.betType === "EXACT_SCORE") {
+        // מקרה א': פגיעה בול בתוצאה המדויקת
+        if (
+          bet.predictedHomeScore === homeScore &&
+          bet.predictedAwayScore === awayScore
+        ) {
           won = true;
-          multiplier = 5; // x5 multiplier for exact score!
+          pointsEarned = 5; // בול! 5 נקודות
+        }
+        // מקרה ב': פספס את התוצאה המדויקת, אבל צדק בכיוון (ניצחון בית / חוץ / תיקו)
+        else if (predictedOutcome === realOutcome) {
+          won = true;
+          pointsEarned = 1; // נקודת ניחומים בלבד (לא יותר!)
         }
       } else {
-        // Outcome prediction (HOME, DRAW, AWAY)
+        // הימורים רגילים (HOME, DRAW, AWAY) - מי שלא ניסה להמר על תוצאה מדויקת
         if (bet.betType === realOutcome) {
           won = true;
-          multiplier = 2; // x2 multiplier for correct match outcome!
+          pointsEarned = 2; // פגיעה בתוצאה רגילה מקבלת 2 נקודות
         }
       }
 
-      // Update bet status
-      bet.status = won ? 'WON' : 'LOST';
-      // Static scoring system: 2 points for correct outcome, 5 points for exact score
-      bet.payout = won ? (bet.betType === 'EXACT_SCORE' ? 5 : 2) : 0;
+      // 4. עדכון סטטוס ההימור והנקודות במערכת
+      bet.status = won ? "WON" : "LOST";
+      bet.payout = pointsEarned;
       updatedBets = true;
 
-      // Update user points balance
+      // עדכון מאזן הנקודות של המשתמש
       if (won) {
-        user.balance += bet.payout;
+        user.balance += pointsEarned;
       }
 
-      // Update user stats
-      const userBets = bets.filter(b => b.userId === user.id);
-      const settledBets = userBets.filter(b => b.status !== 'PENDING');
-      const wonBets = settledBets.filter(b => b.status === 'WON');
-      
-      user.totalBets = settledBets.length;
-      user.winRate = settledBets.length > 0 ? Math.round((wonBets.length / settledBets.length) * 100) : 0;
+      // עדכון סטטיסטיקות משתמש
+      const userBets = bets.filter((b) => b.userId === user.id);
+      const settledBets = userBets.filter((b) => b.status !== "PENDING");
+      const wonBets = settledBets.filter((b) => b.status === "WON");
 
-      // Save user updates back to DB array (db will save it all together)
+      user.totalBets = settledBets.length;
+      user.winRate =
+        settledBets.length > 0
+          ? Math.round((wonBets.length / settledBets.length) * 100)
+          : 0;
+
+      // שמירה לבסיס הנתונים
       this.db.saveUser(user);
       this.db.saveBet(bet);
     });
