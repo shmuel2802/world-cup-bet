@@ -325,7 +325,7 @@ function App() {
   };
 
   // --- Betting Handlers ---
-  const openBetSlip = (match) => {
+  const openBetSlip = async (match) => {
     // הוסר התנאי שחסם פתיחה של משחקים שהתחילו או הסתיימו
     setBetSlipMatch(match);
     if (match.myBet) {
@@ -336,6 +336,32 @@ function App() {
       setBetType("HOME");
       setPredHome("0");
       setPredAway("0");
+    }
+
+    try {
+      const res = await fetch(`${API_URL}/matches/${match.id}/predictions`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setBetSlipMatch((prev) => {
+          if (!prev || prev.id !== match.id) return prev;
+          return {
+            ...prev,
+            homeScore: data.homeScore,
+            awayScore: data.awayScore,
+            currentMinute: data.currentMinute,
+            scorers: data.scorers,
+            communityPredictions: data.predictions,
+            predictionDistribution: {
+              ...prev.predictionDistribution,
+              total: data.total,
+            },
+          };
+        });
+      }
+    } catch (err) {
+      console.error("Error fetching match predictions:", err);
     }
   };
 
@@ -887,7 +913,7 @@ function App() {
                             className={`match-status-badge ${match.status.toLowerCase()}`}
                           >
                             {match.status === "SCHEDULED" && "טרם החל"}
-                            {match.status === "LIVE" && "● בשידור חי"}
+                            {match.status === "LIVE" && (match.currentMinute ? `● בשידור חי (דקה ${match.currentMinute}')` : "● בשידור חי")}
                             {match.status === "FINISHED" && "הסתיים"}
                           </span>
                         </div>
@@ -931,6 +957,27 @@ function App() {
                           <span className="team-name">{match.awayTeam}</span>
                         </div>
                       </div>
+
+                      {match.scorers && match.scorers.length > 0 && (
+                        <div className="match-scorers-box" style={{
+                          fontSize: "0.8rem",
+                          color: "var(--text-secondary)",
+                          textAlign: "center",
+                          marginTop: "-0.5rem",
+                          marginBottom: "0.75rem",
+                          padding: "0.25rem 0.5rem",
+                          background: "rgba(255, 255, 255, 0.02)",
+                          borderRadius: "6px",
+                          display: "flex",
+                          justifyContent: "center",
+                          alignItems: "center",
+                          gap: "0.5rem",
+                          flexWrap: "wrap"
+                        }}>
+                          <span style={{ color: "var(--accent)" }}>⚽</span>
+                          <span>{match.scorers.join(" • ")}</span>
+                        </div>
+                      )}
 
                       {/* User's existing bet on this match */}
                       {match.myBet ? (
@@ -2364,6 +2411,36 @@ function App() {
                 />
               </div>
             </div>
+
+            {betSlipMatch.status === "LIVE" && betSlipMatch.currentMinute && (
+              <div style={{
+                fontSize: "0.8rem",
+                color: "var(--primary)",
+                textAlign: "center",
+                fontWeight: "600",
+                marginTop: "-0.5rem",
+                marginBottom: "0.5rem"
+              }}>
+                בשידור חי (דקה {betSlipMatch.currentMinute}')
+              </div>
+            )}
+
+            {betSlipMatch.scorers && betSlipMatch.scorers.length > 0 && (
+              <div style={{
+                fontSize: "0.85rem",
+                color: "var(--text-secondary)",
+                textAlign: "center",
+                padding: "0.4rem 0.8rem",
+                background: "rgba(255, 255, 255, 0.03)",
+                borderRadius: "8px",
+                margin: "0.5rem auto 1rem auto",
+                maxWidth: "80%",
+                border: "1px solid var(--border-light)"
+              }}>
+                <span style={{ color: "var(--accent)", marginLeft: "0.25rem" }}>⚽</span>
+                {betSlipMatch.scorers.join(" • ")}
+              </div>
+            )}
 
             {/* מציג את אזור ההימור והכפתורים רק אם המשחק עדיין פתוח להימורים */}
             {!isMatchLocked(betSlipMatch) ? (

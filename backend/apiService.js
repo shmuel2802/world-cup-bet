@@ -60,6 +60,32 @@ class FootballApiService {
       const formattedMatches = externalMatches.map((m) => {
         const homeTla = (m.homeTeam?.tla || "un").toLowerCase().slice(0, 2);
         const awayTla = (m.awayTeam?.tla || "un").toLowerCase().slice(0, 2);
+        const mappedStatus = this.mapStatus(m.status);
+
+        // Extract live match elapsed minute
+        let currentMinute = null;
+        if (mappedStatus === "LIVE") {
+          currentMinute = m.minute !== undefined && m.minute !== null ? m.minute : (m.time !== undefined && m.time !== null ? m.time : null);
+        } else if (mappedStatus === "FINISHED") {
+          currentMinute = 90;
+        }
+
+        // Extract goal scorers details from goals array
+        const scorers = [];
+        if (Array.isArray(m.goals)) {
+          m.goals.forEach((goal) => {
+            const scorerName = goal.scorer?.name || "Unknown Scorer";
+            const min = goal.minute !== undefined && goal.minute !== null ? `${goal.minute}'` : "";
+            let typeSuffix = "";
+            if (goal.type === "PENALTY") {
+              typeSuffix = " Pen";
+            } else if (goal.type === "OWN_GOAL") {
+              typeSuffix = " OG";
+            }
+            const timeInfo = min || typeSuffix ? ` (${min}${typeSuffix})` : "";
+            scorers.push(`${scorerName}${timeInfo}`);
+          });
+        }
 
         // Map API response to our database schema
         return {
@@ -70,7 +96,7 @@ class FootballApiService {
             m.homeTeam?.crest || `https://flagcdn.com/w160/${homeTla}.png`,
           awayFlag:
             m.awayTeam?.crest || `https://flagcdn.com/w160/${awayTla}.png`,
-          status: this.mapStatus(m.status),
+          status: mappedStatus,
           utcDate: m.utcDate,
           homeScore:
             m.score?.fullTime?.home !== null &&
@@ -86,6 +112,8 @@ class FootballApiService {
           homeOdds: 2.0, // Odds would be generated or constant since free APIs don't usually provide odds
           drawOdds: 3.2,
           awayOdds: 2.8,
+          currentMinute,
+          scorers,
         };
       });
 

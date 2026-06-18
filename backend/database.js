@@ -40,6 +40,11 @@ function ensureSystemData(data) {
 
   if (!Array.isArray(data.users)) data.users = [];
   if (!Array.isArray(data.matches)) data.matches = [];
+  data.matches = data.matches.map((match) => ({
+    ...match,
+    currentMinute: match.currentMinute !== undefined ? match.currentMinute : null,
+    scorers: match.scorers || [],
+  }));
   if (!Array.isArray(data.bets)) data.bets = [];
   if (!Array.isArray(data.worldCupTeams)) data.worldCupTeams = [];
   if (!Array.isArray(data.worldCupPlayers)) data.worldCupPlayers = [];
@@ -271,29 +276,45 @@ const db = {
   saveMatch: (match) => {
     const data = readDb();
     const index = data.matches.findIndex((m) => m.id === match.id);
+    const updatedMatch = {
+      ...match,
+      currentMinute: match.currentMinute !== undefined ? match.currentMinute : null,
+      scorers: match.scorers || [],
+    };
     if (index !== -1) {
-      data.matches[index] = match;
+      data.matches[index] = updatedMatch;
     } else {
-      data.matches.push(match);
+      data.matches.push(updatedMatch);
     }
     writeDb(data);
-    return match;
+    return updatedMatch;
   },
   saveMatchesBatch: (matchesArray) => {
     const data = readDb();
     matchesArray.forEach((newMatch) => {
       const index = data.matches.findIndex((m) => m.id === newMatch.id);
+      const updatedMatch = {
+        ...newMatch,
+        currentMinute: newMatch.currentMinute !== undefined ? newMatch.currentMinute : null,
+        scorers: newMatch.scorers || [],
+      };
       if (index !== -1) {
-        data.matches[index] = { ...data.matches[index], ...newMatch };
+        data.matches[index] = { ...data.matches[index], ...updatedMatch };
       } else {
-        data.matches.push(newMatch);
+        data.matches.push(updatedMatch);
       }
     });
     writeDb(data);
   },
   replaceMatches: (matchesArray) => {
     const data = readDb();
-    data.matches = Array.isArray(matchesArray) ? matchesArray : [];
+    data.matches = Array.isArray(matchesArray)
+      ? matchesArray.map((m) => ({
+          ...m,
+          currentMinute: m.currentMinute !== undefined ? m.currentMinute : null,
+          scorers: m.scorers || [],
+        }))
+      : [];
     writeDb(data);
     return data.matches;
   },

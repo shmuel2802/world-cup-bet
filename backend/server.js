@@ -266,6 +266,13 @@ app.get("/api/matches/:matchId/predictions", authenticateToken, (req, res) => {
 
   res.json({
     matchId,
+    homeTeam: match.homeTeam,
+    awayTeam: match.awayTeam,
+    homeScore: match.homeScore,
+    awayScore: match.awayScore,
+    currentMinute:
+      match.currentMinute !== undefined ? match.currentMinute : null,
+    scorers: match.scorers || [],
     total: predictions.length,
     predictions,
   });
@@ -677,6 +684,8 @@ app.post("/api/admin/add-match", requireAdmin, (req, res) => {
     homeOdds: parseFloat(homeOdds) || 2.0,
     drawOdds: parseFloat(drawOdds) || 3.0,
     awayOdds: parseFloat(awayOdds) || 2.5,
+    currentMinute: null,
+    scorers: [],
   };
 
   db.saveMatch(newMatch);
@@ -700,7 +709,7 @@ app.listen(PORT, () => {
     .catch((err) => console.error("Initial startup sync failed:", err.message));
 
   // Background auto-sync interval every 5 minutes (completely automated!)
-  const AUTO_SYNC_INTERVAL = 1.5 * 60 * 1000;
+  const AUTO_SYNC_INTERVAL = 4 * 60 * 1000;
   setInterval(async () => {
     try {
       console.log("Running automatic background sync of matches and bets...");
