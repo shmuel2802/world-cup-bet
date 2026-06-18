@@ -308,13 +308,35 @@ const db = {
   },
   replaceMatches: (matchesArray) => {
     const data = readDb();
-    data.matches = Array.isArray(matchesArray)
-      ? matchesArray.map((m) => ({
-          ...m,
-          currentMinute: m.currentMinute !== undefined ? m.currentMinute : null,
-          scorers: m.scorers || [],
-        }))
-      : [];
+    const existingMatches = data.matches || [];
+
+    // Preserve custom matches (IDs not starting with "real_")
+    const customMatches = existingMatches.filter((m) => !m.id.startsWith("real_"));
+
+    // Merge real matches from API
+    const updatedRealMatches = (Array.isArray(matchesArray) ? matchesArray : []).map((apiMatch) => {
+      const existing = existingMatches.find((m) => m.id === apiMatch.id);
+      if (existing) {
+        return {
+          ...apiMatch,
+          // Preserve currentMinute if database has a value and API has null
+          currentMinute: (apiMatch.currentMinute !== null && apiMatch.currentMinute !== undefined)
+            ? apiMatch.currentMinute
+            : (existing.currentMinute !== undefined ? existing.currentMinute : null),
+          // Preserve scorers if database has them and API has none
+          scorers: (apiMatch.scorers && apiMatch.scorers.length > 0)
+            ? apiMatch.scorers
+            : (existing.scorers || []),
+        };
+      }
+      return {
+        ...apiMatch,
+        currentMinute: apiMatch.currentMinute !== undefined ? apiMatch.currentMinute : null,
+        scorers: apiMatch.scorers || [],
+      };
+    });
+
+    data.matches = [...customMatches, ...updatedRealMatches];
     writeDb(data);
     return data.matches;
   },

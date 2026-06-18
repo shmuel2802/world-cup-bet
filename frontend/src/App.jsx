@@ -58,6 +58,8 @@ function App() {
   const [adminHomeScore, setAdminHomeScore] = useState("");
   const [adminAwayScore, setAdminAwayScore] = useState("");
   const [adminMatchStatus, setAdminMatchStatus] = useState("FINISHED");
+  const [adminCurrentMinute, setAdminCurrentMinute] = useState("");
+  const [adminScorers, setAdminScorers] = useState("");
 
   // Custom Match state for admin
   const [customHomeTeam, setCustomHomeTeam] = useState("");
@@ -464,6 +466,11 @@ function App() {
     e.preventDefault();
     if (!adminSelectedMatch) return;
 
+    // Parse scorers from comma-separated string to array
+    const scorersArray = adminScorers
+      ? adminScorers.split(",").map(s => s.trim()).filter(Boolean)
+      : [];
+
     try {
       const res = await fetch(`${API_URL}/admin/match`, {
         method: "POST",
@@ -473,9 +480,11 @@ function App() {
         },
         body: JSON.stringify({
           matchId: adminSelectedMatch.id,
-          homeScore: adminMatchStatus === "FINISHED" ? adminHomeScore : null,
-          awayScore: adminMatchStatus === "FINISHED" ? adminAwayScore : null,
+          homeScore: (adminMatchStatus === "FINISHED" || adminMatchStatus === "LIVE") ? parseInt(adminHomeScore, 10) : null,
+          awayScore: (adminMatchStatus === "FINISHED" || adminMatchStatus === "LIVE") ? parseInt(adminAwayScore, 10) : null,
           status: adminMatchStatus,
+          currentMinute: adminMatchStatus === "LIVE" ? (adminCurrentMinute ? parseInt(adminCurrentMinute, 10) : null) : (adminMatchStatus === "FINISHED" ? 90 : null),
+          scorers: scorersArray,
         }),
       });
       const data = await res.json();
@@ -485,6 +494,8 @@ function App() {
         setAdminSelectedMatch(null);
         setAdminHomeScore("");
         setAdminAwayScore("");
+        setAdminCurrentMinute("");
+        setAdminScorers("");
         fetchData();
         fetchProfile();
       } else {
@@ -1550,7 +1561,7 @@ function App() {
                         </select>
                       </div>
 
-                      {adminMatchStatus === "FINISHED" && (
+                      {(adminMatchStatus === "FINISHED" || adminMatchStatus === "LIVE") && (
                         <>
                           <div className="form-group" style={{ width: "80px" }}>
                             <label>שערים {adminSelectedMatch.homeTeam}</label>
@@ -1576,6 +1587,34 @@ function App() {
                                 setAdminAwayScore(e.target.value)
                               }
                               required
+                            />
+                          </div>
+                          {adminMatchStatus === "LIVE" && (
+                            <div className="form-group" style={{ width: "100px" }}>
+                              <label>דקת משחק</label>
+                              <input
+                                type="number"
+                                className="form-input"
+                                min="0"
+                                max="120"
+                                value={adminCurrentMinute}
+                                onChange={(e) =>
+                                  setAdminCurrentMinute(e.target.value)
+                                }
+                                placeholder="למשל: 45"
+                              />
+                            </div>
+                          )}
+                          <div className="form-group" style={{ flex: "1 1 200px" }}>
+                            <label>כובשי שערים (מופרד בפסיקים)</label>
+                            <input
+                              type="text"
+                              className="form-input"
+                              value={adminScorers}
+                              onChange={(e) =>
+                                setAdminScorers(e.target.value)
+                              }
+                              placeholder="למשל: Lionel Messi (34'), Kylian Mbappé (82' Pen)"
                             />
                           </div>
                         </>
@@ -1626,10 +1665,16 @@ function App() {
                             setAdminSelectedMatch(m);
                             setAdminMatchStatus(m.status);
                             setAdminHomeScore(
-                              m.homeScore !== null ? m.homeScore : "0",
+                              m.homeScore !== null ? String(m.homeScore) : "0",
                             );
                             setAdminAwayScore(
-                              m.awayScore !== null ? m.awayScore : "0",
+                              m.awayScore !== null ? String(m.awayScore) : "0",
+                            );
+                            setAdminCurrentMinute(
+                              m.currentMinute !== null && m.currentMinute !== undefined ? String(m.currentMinute) : "",
+                            );
+                            setAdminScorers(
+                              m.scorers ? m.scorers.join(", ") : "",
                             );
                           }}
                         >

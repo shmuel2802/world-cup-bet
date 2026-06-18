@@ -546,7 +546,7 @@ app.post("/api/admin/sync", requireAdmin, async (req, res) => {
 
 // Manually update match score (perfect for testing match payouts!)
 app.post("/api/admin/match", requireAdmin, (req, res) => {
-  const { matchId, homeScore, awayScore, status } = req.body;
+  const { matchId, homeScore, awayScore, status, currentMinute, scorers } = req.body;
 
   if (!matchId || status === undefined) {
     return res
@@ -562,6 +562,13 @@ app.post("/api/admin/match", requireAdmin, (req, res) => {
     homeScore !== null && homeScore !== undefined ? parseInt(homeScore) : null;
   match.awayScore =
     awayScore !== null && awayScore !== undefined ? parseInt(awayScore) : null;
+
+  if (currentMinute !== undefined) {
+    match.currentMinute = currentMinute !== null ? parseInt(currentMinute) : null;
+  }
+  if (scorers !== undefined) {
+    match.scorers = Array.isArray(scorers) ? scorers : [];
+  }
 
   db.saveMatch(match);
 

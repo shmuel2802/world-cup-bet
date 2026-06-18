@@ -51,11 +51,19 @@ class FootballApiService {
       // Batch save teams into worldCupTeams
       this.db.saveWorldCupTeamsBatch(teamsArray);
 
-      // Trigger player squads sync in background
-      const teamIds = Array.from(teamsMap.keys());
-      this.syncPlayerSquads(teamIds, apiKey).catch((err) => {
-        console.error("Background player squads sync failed:", err.message);
-      });
+      // Only sync squads for teams that don't have players yet
+      const existingPlayers = this.db.getWorldCupPlayers();
+      const teamsWithPlayers = new Set(existingPlayers.map((p) => p.team_id));
+      const teamIdsToSync = teamIds.filter((id) => !teamsWithPlayers.has(id));
+
+      if (teamIdsToSync.length > 0) {
+        console.log(`[Squad Sync] Syncing player squads for ${teamIdsToSync.length} new teams...`);
+        this.syncPlayerSquads(teamIdsToSync, apiKey).catch((err) => {
+          console.error("Background player squads sync failed:", err.message);
+        });
+      } else {
+        console.log("All team squads are already populated in database. Skipping squad sync.");
+      }
 
       const formattedMatches = externalMatches.map((m) => {
         const homeTla = (m.homeTeam?.tla || "un").toLowerCase().slice(0, 2);
