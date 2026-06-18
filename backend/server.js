@@ -699,8 +699,8 @@ app.listen(PORT, () => {
     .syncMatches()
     .catch((err) => console.error("Initial startup sync failed:", err.message));
 
-  // Background auto-sync interval every 30 minutes (completely automated!)
-  const AUTO_SYNC_INTERVAL = 30 * 60 * 1000;
+  // Background auto-sync interval every 5 minutes (completely automated!)
+  const AUTO_SYNC_INTERVAL = 1.5 * 60 * 1000;
   setInterval(async () => {
     try {
       console.log("Running automatic background sync of matches and bets...");
