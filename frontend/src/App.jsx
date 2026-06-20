@@ -24,7 +24,7 @@ const API_URL =
   import.meta.env.VITE_API_URL ||
   (import.meta.env.DEV
     ? "http://localhost:5000/api"
-    : "https://world-cup-bet.onrender.com/api");
+    : "https://world-cup-bet-fxvd.onrender.com/api");
 
 function App() {
   // Auth State
@@ -88,23 +88,41 @@ function App() {
 
   // 1. Fetch user profile and app data if authenticated
   useEffect(() => {
-    if (token) {
-      localStorage.setItem("token", token);
-      fetchProfile();
-      fetchData();
-    } else {
-      localStorage.removeItem("token");
-      setUser(null);
-    }
+    if (!token) return;
+
+    // פונקציה שמביאה את כל המידע יחד
+    const refreshData = () => {
+      if (document.hidden) return;
+      fetchMatchesOnly();
+      fetchLeaderboardOnly();
+    };
+
+    // 1. הגדרת ה-Interval הרגיל (כל 60 שניות)
+    const interval = setInterval(refreshData, 60000);
+
+    // 2. האזנה לחזרה של המשתמש לאפליקציה (הדלקת מסך / מעבר טאב)
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        refreshData(); // רענון מיידי ברגע שחזרו לאפליקציה!
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    // ניקוי ה-Interval והמאזין כשהקומפוננטה נסגרת
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
   }, [token]);
 
-  // Periodic background data sync every 15 seconds
+  // Periodic background data sync every 60 seconds (only when page is visible to save bandwidth)
   useEffect(() => {
     if (!token) return;
     const interval = setInterval(() => {
+      if (document.hidden) return; // Skip fetch if tab is in the background
       fetchMatchesOnly();
       fetchLeaderboardOnly();
-    }, 15000);
+    }, 60000);
     return () => clearInterval(interval);
   }, [token]);
 
@@ -468,7 +486,10 @@ function App() {
 
     // Parse scorers from comma-separated string to array
     const scorersArray = adminScorers
-      ? adminScorers.split(",").map(s => s.trim()).filter(Boolean)
+      ? adminScorers
+          .split(",")
+          .map((s) => s.trim())
+          .filter(Boolean)
       : [];
 
     try {
@@ -480,10 +501,23 @@ function App() {
         },
         body: JSON.stringify({
           matchId: adminSelectedMatch.id,
-          homeScore: (adminMatchStatus === "FINISHED" || adminMatchStatus === "LIVE") ? parseInt(adminHomeScore, 10) : null,
-          awayScore: (adminMatchStatus === "FINISHED" || adminMatchStatus === "LIVE") ? parseInt(adminAwayScore, 10) : null,
+          homeScore:
+            adminMatchStatus === "FINISHED" || adminMatchStatus === "LIVE"
+              ? parseInt(adminHomeScore, 10)
+              : null,
+          awayScore:
+            adminMatchStatus === "FINISHED" || adminMatchStatus === "LIVE"
+              ? parseInt(adminAwayScore, 10)
+              : null,
           status: adminMatchStatus,
-          currentMinute: adminMatchStatus === "LIVE" ? (adminCurrentMinute ? parseInt(adminCurrentMinute, 10) : null) : (adminMatchStatus === "FINISHED" ? 90 : null),
+          currentMinute:
+            adminMatchStatus === "LIVE"
+              ? adminCurrentMinute
+                ? parseInt(adminCurrentMinute, 10)
+                : null
+              : adminMatchStatus === "FINISHED"
+                ? 90
+                : null,
           scorers: scorersArray,
         }),
       });
@@ -924,7 +958,10 @@ function App() {
                             className={`match-status-badge ${match.status.toLowerCase()}`}
                           >
                             {match.status === "SCHEDULED" && "טרם החל"}
-                            {match.status === "LIVE" && (match.currentMinute ? `● בשידור חי (דקה ${match.currentMinute}')` : "● בשידור חי")}
+                            {match.status === "LIVE" &&
+                              (match.currentMinute
+                                ? `● בשידור חי (דקה ${match.currentMinute}')`
+                                : "● בשידור חי")}
                             {match.status === "FINISHED" && "הסתיים"}
                           </span>
                         </div>
@@ -970,21 +1007,24 @@ function App() {
                       </div>
 
                       {match.scorers && match.scorers.length > 0 && (
-                        <div className="match-scorers-box" style={{
-                          fontSize: "0.8rem",
-                          color: "var(--text-secondary)",
-                          textAlign: "center",
-                          marginTop: "-0.5rem",
-                          marginBottom: "0.75rem",
-                          padding: "0.25rem 0.5rem",
-                          background: "rgba(255, 255, 255, 0.02)",
-                          borderRadius: "6px",
-                          display: "flex",
-                          justifyContent: "center",
-                          alignItems: "center",
-                          gap: "0.5rem",
-                          flexWrap: "wrap"
-                        }}>
+                        <div
+                          className="match-scorers-box"
+                          style={{
+                            fontSize: "0.8rem",
+                            color: "var(--text-secondary)",
+                            textAlign: "center",
+                            marginTop: "-0.5rem",
+                            marginBottom: "0.75rem",
+                            padding: "0.25rem 0.5rem",
+                            background: "rgba(255, 255, 255, 0.02)",
+                            borderRadius: "6px",
+                            display: "flex",
+                            justifyContent: "center",
+                            alignItems: "center",
+                            gap: "0.5rem",
+                            flexWrap: "wrap",
+                          }}
+                        >
                           <span style={{ color: "var(--accent)" }}>⚽</span>
                           <span>{match.scorers.join(" • ")}</span>
                         </div>
@@ -1561,7 +1601,8 @@ function App() {
                         </select>
                       </div>
 
-                      {(adminMatchStatus === "FINISHED" || adminMatchStatus === "LIVE") && (
+                      {(adminMatchStatus === "FINISHED" ||
+                        adminMatchStatus === "LIVE") && (
                         <>
                           <div className="form-group" style={{ width: "80px" }}>
                             <label>שערים {adminSelectedMatch.homeTeam}</label>
@@ -1590,7 +1631,10 @@ function App() {
                             />
                           </div>
                           {adminMatchStatus === "LIVE" && (
-                            <div className="form-group" style={{ width: "100px" }}>
+                            <div
+                              className="form-group"
+                              style={{ width: "100px" }}
+                            >
                               <label>דקת משחק</label>
                               <input
                                 type="number"
@@ -1605,15 +1649,16 @@ function App() {
                               />
                             </div>
                           )}
-                          <div className="form-group" style={{ flex: "1 1 200px" }}>
+                          <div
+                            className="form-group"
+                            style={{ flex: "1 1 200px" }}
+                          >
                             <label>כובשי שערים (מופרד בפסיקים)</label>
                             <input
                               type="text"
                               className="form-input"
                               value={adminScorers}
-                              onChange={(e) =>
-                                setAdminScorers(e.target.value)
-                              }
+                              onChange={(e) => setAdminScorers(e.target.value)}
                               placeholder="למשל: Lionel Messi (34'), Kylian Mbappé (82' Pen)"
                             />
                           </div>
@@ -1671,7 +1716,10 @@ function App() {
                               m.awayScore !== null ? String(m.awayScore) : "0",
                             );
                             setAdminCurrentMinute(
-                              m.currentMinute !== null && m.currentMinute !== undefined ? String(m.currentMinute) : "",
+                              m.currentMinute !== null &&
+                                m.currentMinute !== undefined
+                                ? String(m.currentMinute)
+                                : "",
                             );
                             setAdminScorers(
                               m.scorers ? m.scorers.join(", ") : "",
@@ -2458,31 +2506,37 @@ function App() {
             </div>
 
             {betSlipMatch.status === "LIVE" && betSlipMatch.currentMinute && (
-              <div style={{
-                fontSize: "0.8rem",
-                color: "var(--primary)",
-                textAlign: "center",
-                fontWeight: "600",
-                marginTop: "-0.5rem",
-                marginBottom: "0.5rem"
-              }}>
+              <div
+                style={{
+                  fontSize: "0.8rem",
+                  color: "var(--primary)",
+                  textAlign: "center",
+                  fontWeight: "600",
+                  marginTop: "-0.5rem",
+                  marginBottom: "0.5rem",
+                }}
+              >
                 בשידור חי (דקה {betSlipMatch.currentMinute}')
               </div>
             )}
 
             {betSlipMatch.scorers && betSlipMatch.scorers.length > 0 && (
-              <div style={{
-                fontSize: "0.85rem",
-                color: "var(--text-secondary)",
-                textAlign: "center",
-                padding: "0.4rem 0.8rem",
-                background: "rgba(255, 255, 255, 0.03)",
-                borderRadius: "8px",
-                margin: "0.5rem auto 1rem auto",
-                maxWidth: "80%",
-                border: "1px solid var(--border-light)"
-              }}>
-                <span style={{ color: "var(--accent)", marginLeft: "0.25rem" }}>⚽</span>
+              <div
+                style={{
+                  fontSize: "0.85rem",
+                  color: "var(--text-secondary)",
+                  textAlign: "center",
+                  padding: "0.4rem 0.8rem",
+                  background: "rgba(255, 255, 255, 0.03)",
+                  borderRadius: "8px",
+                  margin: "0.5rem auto 1rem auto",
+                  maxWidth: "80%",
+                  border: "1px solid var(--border-light)",
+                }}
+              >
+                <span style={{ color: "var(--accent)", marginLeft: "0.25rem" }}>
+                  ⚽
+                </span>
                 {betSlipMatch.scorers.join(" • ")}
               </div>
             )}
