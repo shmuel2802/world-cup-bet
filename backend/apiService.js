@@ -51,18 +51,25 @@ class FootballApiService {
       // Batch save teams into worldCupTeams
       this.db.saveWorldCupTeamsBatch(teamsArray);
 
+      // --- התיקון כאן: חילוץ מערך ה-IDs מתוך המפה כדי שיהיה מוגדר לשלב הבא ---
+      const teamIds = Array.from(teamsMap.keys());
+
       // Only sync squads for teams that don't have players yet
       const existingPlayers = this.db.getWorldCupPlayers();
       const teamsWithPlayers = new Set(existingPlayers.map((p) => p.team_id));
       const teamIdsToSync = teamIds.filter((id) => !teamsWithPlayers.has(id));
 
       if (teamIdsToSync.length > 0) {
-        console.log(`[Squad Sync] Syncing player squads for ${teamIdsToSync.length} new teams...`);
+        console.log(
+          `[Squad Sync] Syncing player squads for ${teamIdsToSync.length} new teams...`,
+        );
         this.syncPlayerSquads(teamIdsToSync, apiKey).catch((err) => {
           console.error("Background player squads sync failed:", err.message);
         });
       } else {
-        console.log("All team squads are already populated in database. Skipping squad sync.");
+        console.log(
+          "All team squads are already populated in database. Skipping squad sync.",
+        );
       }
 
       const formattedMatches = externalMatches.map((m) => {
@@ -73,7 +80,12 @@ class FootballApiService {
         // Extract live match elapsed minute
         let currentMinute = null;
         if (mappedStatus === "LIVE") {
-          currentMinute = m.minute !== undefined && m.minute !== null ? m.minute : (m.time !== undefined && m.time !== null ? m.time : null);
+          currentMinute =
+            m.minute !== undefined && m.minute !== null
+              ? m.minute
+              : m.time !== undefined && m.time !== null
+                ? m.time
+                : null;
         } else if (mappedStatus === "FINISHED") {
           currentMinute = 90;
         }
@@ -83,7 +95,10 @@ class FootballApiService {
         if (Array.isArray(m.goals)) {
           m.goals.forEach((goal) => {
             const scorerName = goal.scorer?.name || "Unknown Scorer";
-            const min = goal.minute !== undefined && goal.minute !== null ? `${goal.minute}'` : "";
+            const min =
+              goal.minute !== undefined && goal.minute !== null
+                ? `${goal.minute}'`
+                : "";
             let typeSuffix = "";
             if (goal.type === "PENALTY") {
               typeSuffix = " Pen";

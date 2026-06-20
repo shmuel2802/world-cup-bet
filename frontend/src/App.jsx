@@ -20,12 +20,7 @@ import {
   Pencil,
 } from "lucide-react";
 
-const API_URL =
-  import.meta.env.VITE_API_URL ||
-  (import.meta.env.DEV
-    ? "http://localhost:5000/api"
-    : "https://world-cup-bet-fxvd.onrender.com/api");
-
+const API_URL = "https://world-cup-bet-fxvd.onrender.com/api";
 function App() {
   // Auth State
   const [token, setToken] = useState(localStorage.getItem("token") || "");
