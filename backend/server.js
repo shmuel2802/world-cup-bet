@@ -546,7 +546,8 @@ app.post("/api/admin/sync", requireAdmin, async (req, res) => {
 
 // Manually update match score (perfect for testing match payouts!)
 app.post("/api/admin/match", requireAdmin, (req, res) => {
-  const { matchId, homeScore, awayScore, status, currentMinute, scorers } = req.body;
+  const { matchId, homeScore, awayScore, status, currentMinute, scorers } =
+    req.body;
 
   if (!matchId || status === undefined) {
     return res
@@ -564,7 +565,8 @@ app.post("/api/admin/match", requireAdmin, (req, res) => {
     awayScore !== null && awayScore !== undefined ? parseInt(awayScore) : null;
 
   if (currentMinute !== undefined) {
-    match.currentMinute = currentMinute !== null ? parseInt(currentMinute) : null;
+    match.currentMinute =
+      currentMinute !== null ? parseInt(currentMinute) : null;
   }
   if (scorers !== undefined) {
     match.scorers = Array.isArray(scorers) ? scorers : [];
@@ -704,10 +706,31 @@ app.post("/api/admin/add-match", requireAdmin, (req, res) => {
 });
 
 // Start server and run initial sync
+// Start server and run initial sync
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
   db.getMatches(); // trigger seed load
   console.log("Database seeded and ready.");
+
+  // אכיפת סטטוס אדמין קבוע עבור החשבון "שמואל" בכל עליית שרת כדי שלא יידרס בענן
+  try {
+    const users = db.getUsers();
+    const myUser = users.find((u) => u.username === "שמואל");
+
+    if (myUser) {
+      myUser.isAdmin = true;
+      db.saveUser(myUser); // שמירה ישירה שמאלצת את הזיכרון והענן להתעדכן ב-true
+      console.log(
+        `[Admin Setup] Successfully enforced isAdmin=true for account: ${myUser.username} ✅`,
+      );
+    } else {
+      console.log(
+        "[Admin Setup] Warning: User 'שמואל' not found in database yet.",
+      );
+    }
+  } catch (e) {
+    console.error("[Admin Setup] Failed to enforce admin setup:", e.message);
+  }
 
   // Initial sync on startup to pull latest real matches/scores
   console.log("Running initial matches and bets sync on startup...");
@@ -715,7 +738,7 @@ app.listen(PORT, () => {
     .syncMatches()
     .catch((err) => console.error("Initial startup sync failed:", err.message));
 
-  // Background auto-sync interval every 5 minutes (completely automated!)
+  // Background auto-sync interval every 4 minutes (completely automated!)
   const AUTO_SYNC_INTERVAL = 4 * 60 * 1000;
   setInterval(async () => {
     try {
