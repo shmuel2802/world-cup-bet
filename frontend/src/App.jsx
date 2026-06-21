@@ -24,8 +24,14 @@ const API_URL = "https://world-cup-bet-fxvd.onrender.com/api";
 function App() {
   // Auth State
   const [token, setToken] = useState(localStorage.getItem("token") || "");
-  const [user, setUser] = useState(null);
-  const [isInitializing, setIsInitializing] = useState(!!localStorage.getItem("token"));
+  const [user, setUser] = useState(() => {
+    try {
+      const u = localStorage.getItem("world_cup_user");
+      return u ? JSON.parse(u) : null;
+    } catch {
+      return null;
+    }
+  });
   const [authMode, setAuthMode] = useState("login"); // login or register
   const [usernameInput, setUsernameInput] = useState("");
   const [passwordInput, setPasswordInput] = useState("");
@@ -118,16 +124,6 @@ function App() {
     };
   }, [token]);
 
-  // Periodic background data sync every 60 seconds (only when page is visible to save bandwidth)
-  useEffect(() => {
-    if (!token) return;
-    const interval = setInterval(() => {
-      if (document.hidden) return; // Skip fetch if tab is in the background
-      fetchMatchesOnly();
-      fetchLeaderboardOnly();
-    }, 60000);
-    return () => clearInterval(interval);
-  }, [token]);
 
   // Load admin users when admin tab is opened
   useEffect(() => {
@@ -138,10 +134,9 @@ function App() {
 
   // Auto-login: validate stored token on first mount and populate user state
   useEffect(() => {
-    if (!token) {
-      setIsInitializing(false);
-      return;
-    }
+    if (!token) return;
+    fetchMatchesOnly();
+    fetchLeaderboardOnly();
     fetch(`${API_URL}/auth/me`, {
       headers: { Authorization: `Bearer ${token}` },
     })
@@ -149,7 +144,9 @@ function App() {
         if (!res.ok) {
           localStorage.removeItem("token");
           localStorage.removeItem("world_cup_matches");
+          localStorage.removeItem("world_cup_user");
           setToken("");
+          setUser(null);
           return null;
         }
         return res.json();
@@ -157,12 +154,10 @@ function App() {
       .then((data) => {
         if (data) {
           setUser(data);
-          fetchMatchesOnly();
-          fetchLeaderboardOnly();
+          try { localStorage.setItem("world_cup_user", JSON.stringify(data)); } catch {}
         }
       })
-      .catch(console.error)
-      .finally(() => setIsInitializing(false));
+      .catch(console.error);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const showToast = (text, type = "success") => {
@@ -343,6 +338,7 @@ function App() {
 
       if (res.ok) {
         localStorage.setItem("token", data.token);
+        try { localStorage.setItem("world_cup_user", JSON.stringify(data.user)); } catch {}
         setToken(data.token);
         setUser(data.user);
         setUsernameInput("");
@@ -364,6 +360,7 @@ function App() {
     setToken("");
     setUser(null);
     localStorage.removeItem("token");
+    localStorage.removeItem("world_cup_user");
     showToast("התנתקת בהצלחה. נתראה במגרש!", "info");
   };
 
@@ -692,18 +689,6 @@ function App() {
       match.status !== "SCHEDULED" || new Date() >= new Date(match.utcDate)
     );
   };
-
-  // --- INITIALIZING SPLASH ---
-  if (isInitializing) {
-    return (
-      <div className="app-container" style={{ justifyContent: "center", alignItems: "center" }}>
-        <div style={{ textAlign: "center", color: "var(--text-secondary)" }}>
-          <div style={{ fontSize: "2.5rem", marginBottom: "1rem" }}>⚽</div>
-          <div style={{ fontSize: "1rem" }}>טוען...</div>
-        </div>
-      </div>
-    );
-  }
 
   // --- UNAUTHENTICATED RENDER ---
   if (!token || !user) {
@@ -1051,30 +1036,6 @@ function App() {
                         </div>
                       </div>
 
-                      {(match.status === "LIVE" || match.status === "FINISHED") &&
-                        match.scorers && match.scorers.length > 0 && (
-                        <div
-                          className="match-scorers-box"
-                          style={{
-                            fontSize: "0.8rem",
-                            color: "var(--text-secondary)",
-                            textAlign: "center",
-                            marginTop: "-0.5rem",
-                            marginBottom: "0.75rem",
-                            padding: "0.25rem 0.5rem",
-                            background: "rgba(255, 255, 255, 0.02)",
-                            borderRadius: "6px",
-                            display: "flex",
-                            justifyContent: "center",
-                            alignItems: "center",
-                            gap: "0.5rem",
-                            flexWrap: "wrap",
-                          }}
-                        >
-                          <span style={{ color: "var(--accent)" }}>⚽</span>
-                          <span>{match.scorers.join(" • ")}</span>
-                        </div>
-                      )}
 
                       {/* User's existing bet on this match */}
                       {match.myBet ? (
@@ -2551,27 +2512,6 @@ function App() {
               </div>
             </div>
 
-            {(betSlipMatch.status === "LIVE" || betSlipMatch.status === "FINISHED") &&
-              betSlipMatch.scorers && betSlipMatch.scorers.length > 0 && (
-              <div
-                style={{
-                  fontSize: "0.85rem",
-                  color: "var(--text-secondary)",
-                  textAlign: "center",
-                  padding: "0.4rem 0.8rem",
-                  background: "rgba(255, 255, 255, 0.03)",
-                  borderRadius: "8px",
-                  margin: "0.5rem auto 1rem auto",
-                  maxWidth: "80%",
-                  border: "1px solid var(--border-light)",
-                }}
-              >
-                <span style={{ color: "var(--accent)", marginLeft: "0.25rem" }}>
-                  ⚽
-                </span>
-                {betSlipMatch.scorers.join(" • ")}
-              </div>
-            )}
 
             {/* מציג את אזור ההימור והכפתורים רק אם המשחק עדיין פתוח להימורים */}
             {!isMatchLocked(betSlipMatch) ? (
