@@ -128,6 +128,26 @@ function App() {
     }
   }, [token, user, activeTab]);
 
+  // Auto-login: validate stored token on first mount and populate user state
+  useEffect(() => {
+    if (!token) return;
+    fetch(`${API_URL}/auth/me`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then((res) => {
+        if (!res.ok) {
+          localStorage.removeItem("token");
+          setToken("");
+          return null;
+        }
+        return res.json();
+      })
+      .then((data) => {
+        if (data) setUser(data);
+      })
+      .catch(console.error);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   const showToast = (text, type = "success") => {
     setMessage({ text, type });
     setTimeout(() => setMessage({ text: "", type: "" }), 5000);
@@ -302,6 +322,7 @@ function App() {
       const data = await res.json();
 
       if (res.ok) {
+        localStorage.setItem("token", data.token);
         setToken(data.token);
         setUser(data.user);
         setUsernameInput("");

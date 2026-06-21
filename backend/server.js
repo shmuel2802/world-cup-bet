@@ -18,6 +18,8 @@ app.use(express.json());
 
 const apiService = new FootballApiService(db);
 
+let lastExternalSyncTime = 0;
+
 // --- JWT AUTHENTICATION MIDDLEWARE ---
 const authenticateToken = (req, res, next) => {
   const authHeader = req.headers["authorization"];
@@ -244,6 +246,16 @@ app.get("/api/matches", authenticateToken, (req, res) => {
   });
 
   res.json(matchesWithBets);
+
+  // Background sync: at most once every 10 minutes, never blocks the response
+  if (Date.now() - lastExternalSyncTime > 10 * 60 * 1000) {
+    apiService
+      .syncMatches()
+      .then(() => {
+        lastExternalSyncTime = Date.now();
+      })
+      .catch((err) => console.error("[Background Sync] Failed:", err));
+  }
 });
 
 // Get public predictions for a specific match (username + prediction + status only)
