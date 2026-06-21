@@ -25,6 +25,7 @@ function App() {
   // Auth State
   const [token, setToken] = useState(localStorage.getItem("token") || "");
   const [user, setUser] = useState(null);
+  const [isInitializing, setIsInitializing] = useState(!!localStorage.getItem("token"));
   const [authMode, setAuthMode] = useState("login"); // login or register
   const [usernameInput, setUsernameInput] = useState("");
   const [passwordInput, setPasswordInput] = useState("");
@@ -35,7 +36,14 @@ function App() {
   const [activeTab, setActiveTab] = useState("matches"); // matches, leaderboard, bets, admin
 
   // Data States
-  const [matches, setMatches] = useState([]);
+  const [matches, setMatches] = useState(() => {
+    try {
+      const cached = localStorage.getItem("world_cup_matches");
+      return cached ? JSON.parse(cached) : [];
+    } catch {
+      return [];
+    }
+  });
   const [bets, setBets] = useState([]);
   const [leaderboard, setLeaderboard] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -130,22 +138,31 @@ function App() {
 
   // Auto-login: validate stored token on first mount and populate user state
   useEffect(() => {
-    if (!token) return;
+    if (!token) {
+      setIsInitializing(false);
+      return;
+    }
     fetch(`${API_URL}/auth/me`, {
       headers: { Authorization: `Bearer ${token}` },
     })
       .then((res) => {
         if (!res.ok) {
           localStorage.removeItem("token");
+          localStorage.removeItem("world_cup_matches");
           setToken("");
           return null;
         }
         return res.json();
       })
       .then((data) => {
-        if (data) setUser(data);
+        if (data) {
+          setUser(data);
+          fetchMatchesOnly();
+          fetchLeaderboardOnly();
+        }
       })
-      .catch(console.error);
+      .catch(console.error)
+      .finally(() => setIsInitializing(false));
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const showToast = (text, type = "success") => {
@@ -199,7 +216,10 @@ function App() {
         headers: { Authorization: `Bearer ${token}` },
       });
       const data = await res.json();
-      if (res.ok) setMatches(data);
+      if (res.ok) {
+        setMatches(data);
+        try { localStorage.setItem("world_cup_matches", JSON.stringify(data)); } catch {}
+      }
     } catch (err) {
       console.error(err);
     }
@@ -673,6 +693,18 @@ function App() {
     );
   };
 
+  // --- INITIALIZING SPLASH ---
+  if (isInitializing) {
+    return (
+      <div className="app-container" style={{ justifyContent: "center", alignItems: "center" }}>
+        <div style={{ textAlign: "center", color: "var(--text-secondary)" }}>
+          <div style={{ fontSize: "2.5rem", marginBottom: "1rem" }}>⚽</div>
+          <div style={{ fontSize: "1rem" }}>טוען...</div>
+        </div>
+      </div>
+    );
+  }
+
   // --- UNAUTHENTICATED RENDER ---
   if (!token || !user) {
     return (
@@ -974,10 +1006,7 @@ function App() {
                             className={`match-status-badge ${match.status.toLowerCase()}`}
                           >
                             {match.status === "SCHEDULED" && "טרם החל"}
-                            {match.status === "LIVE" &&
-                              (match.currentMinute
-                                ? `● בשידור חי (דקה ${match.currentMinute}')`
-                                : "● בשידור חי")}
+                            {match.status === "LIVE" && "● בשידור חי"}
                             {match.status === "FINISHED" && "הסתיים"}
                           </span>
                         </div>
@@ -1022,7 +1051,8 @@ function App() {
                         </div>
                       </div>
 
-                      {match.scorers && match.scorers.length > 0 && (
+                      {(match.status === "LIVE" || match.status === "FINISHED") &&
+                        match.scorers && match.scorers.length > 0 && (
                         <div
                           className="match-scorers-box"
                           style={{
@@ -2521,22 +2551,8 @@ function App() {
               </div>
             </div>
 
-            {betSlipMatch.status === "LIVE" && betSlipMatch.currentMinute && (
-              <div
-                style={{
-                  fontSize: "0.8rem",
-                  color: "var(--primary)",
-                  textAlign: "center",
-                  fontWeight: "600",
-                  marginTop: "-0.5rem",
-                  marginBottom: "0.5rem",
-                }}
-              >
-                בשידור חי (דקה {betSlipMatch.currentMinute}')
-              </div>
-            )}
-
-            {betSlipMatch.scorers && betSlipMatch.scorers.length > 0 && (
+            {(betSlipMatch.status === "LIVE" || betSlipMatch.status === "FINISHED") &&
+              betSlipMatch.scorers && betSlipMatch.scorers.length > 0 && (
               <div
                 style={{
                   fontSize: "0.85rem",
